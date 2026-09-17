@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import sqlite3
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+from tkinter import font as tkfont
 from urllib.parse import quote
 
 from .core import Account, Engine, Settings, SyncError
@@ -17,6 +19,8 @@ PRIMARY = '#2563EB'
 PRIMARY_DARK = '#1D4ED8'
 BORDER = '#E2E8F0'
 WARNING = '#B91C1C'
+UI_FONT = 'Microsoft YaHei UI'
+MONO_FONT = 'Consolas'
 
 MESSAGES = {
     'disabled': '自动同步未开启。可以先预览，再同步一次。',
@@ -32,6 +36,19 @@ MESSAGES = {
 
 def short_id(value: str) -> str:
     return value if len(value) <= 14 else value[:8] + '…' + value[-4:]
+
+
+def enable_windows_dpi_awareness():
+    if os.name == 'nt':
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+
+
+def configure_default_fonts(root):
+    for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont', 'TkCaptionFont'):
+        tkfont.nametofont(name, root=root).configure(family=UI_FONT, size=10)
+    tkfont.nametofont('TkHeadingFont', root=root).configure(
+        family=UI_FONT, size=10, weight='bold')
+    tkfont.nametofont('TkFixedFont', root=root).configure(family=MONO_FONT, size=9)
 
 
 class CellTooltip:
@@ -70,7 +87,7 @@ class CellTooltip:
         self.tip.wm_geometry(f'+{event.x_root + 12}+{event.y_root + 18}')
         tk.Label(
             self.tip, text=text, background='#0F172A', foreground='#FFFFFF',
-            padx=9, pady=5, font=('Microsoft YaHei UI', 9),
+            padx=9, pady=5, font=(UI_FONT, 9),
         ).pack()
 
     def hide(self, _event=None):
@@ -96,6 +113,7 @@ class Window:
         root.geometry('1180x820')
         root.minsize(980, 700)
         root.configure(background=BG)
+        configure_default_fonts(root)
         self._configure_styles()
 
         root.columnconfigure(0, weight=1)
@@ -144,7 +162,7 @@ class Window:
         status_frame.grid(row=3, column=0, sticky='ew', pady=(14, 0))
         self.status_label = tk.Label(
             status_frame, textvariable=self.status, background='#EFF6FF', foreground='#1E40AF',
-            anchor='w', justify='left', font=('Microsoft YaHei UI', 10),
+            anchor='w', justify='left', font=(UI_FONT, 10),
         )
         self.status_label.pack(fill='x')
 
@@ -154,61 +172,63 @@ class Window:
     def _configure_styles(self):
         style = ttk.Style(self.root)
         style.theme_use('clam')
-        style.configure('.', font=('Microsoft YaHei UI', 10), foreground=TEXT)
+        style.configure('.', font=(UI_FONT, 10), foreground=TEXT)
         style.configure('App.TFrame', background=BG)
         style.configure('Card.TFrame', background=CARD, relief='solid', borderwidth=1)
+        style.configure('CardContent.TFrame', background=CARD, relief='flat', borderwidth=0)
+        style.configure('Card.TSeparator', background=BORDER)
         style.configure('Title.TLabel', background=BG, foreground='#0F172A',
-                        font=('Microsoft YaHei UI', 23, 'bold'))
+                        font=(UI_FONT, 24, 'bold'))
         style.configure('Subtitle.TLabel', background=BG, foreground=MUTED,
-                        font=('Microsoft YaHei UI', 10))
+                        font=(UI_FONT, 10))
         style.configure('CardTitle.TLabel', background=CARD, foreground=MUTED,
-                        font=('Microsoft YaHei UI', 9))
+                        font=(UI_FONT, 9))
         style.configure('AccountName.TLabel', background=CARD, foreground='#0F172A',
-                        font=('Microsoft YaHei UI', 16, 'bold'))
+                        font=(UI_FONT, 16, 'bold'))
         style.configure('Metric.TLabel', background=CARD, foreground='#0F172A',
-                        font=('Microsoft YaHei UI', 24, 'bold'))
+                        font=(UI_FONT, 24, 'bold'))
         style.configure('CardBody.TLabel', background=CARD, foreground=TEXT)
         style.configure('MutedCard.TLabel', background=CARD, foreground=MUTED)
         style.configure('Mono.TLabel', background=CARD, foreground=MUTED,
-                        font=('Consolas', 9))
+                        font=(MONO_FONT, 9))
         style.configure('Guide.TLabel', background='#EFF6FF', foreground='#1E40AF')
         style.configure('App.TNotebook', background=BG, borderwidth=0)
         style.layout('App.TNotebook.Tab', [])
         style.configure('Nav.TButton', background='#E2E8F0', foreground=MUTED,
-                        borderwidth=1, padding=(14, 9), font=('Microsoft YaHei UI', 10, 'bold'))
+                        borderwidth=1, padding=(14, 9), font=(UI_FONT, 10, 'bold'))
         style.map('Nav.TButton', background=[('active', '#CBD5E1')])
         style.configure('NavSelected.TButton', background=CARD, foreground=PRIMARY,
                         bordercolor=PRIMARY, borderwidth=1, padding=(14, 9),
-                        font=('Microsoft YaHei UI', 10, 'bold'))
+                        font=(UI_FONT, 10, 'bold'))
         style.map('NavSelected.TButton', background=[('active', CARD)])
         style.configure('ToggleOn.TButton', background=PRIMARY, foreground='#FFFFFF',
-                        borderwidth=1, padding=(14, 8), font=('Microsoft YaHei UI', 10, 'bold'))
+                        borderwidth=1, padding=(14, 8), font=(UI_FONT, 10, 'bold'))
         style.map('ToggleOn.TButton', background=[('active', PRIMARY_DARK)])
         style.configure('ToggleOff.TButton', background=CARD, foreground=MUTED,
                         bordercolor='#CBD5E1', borderwidth=1, padding=(14, 8),
-                        font=('Microsoft YaHei UI', 10, 'bold'))
+                        font=(UI_FONT, 10, 'bold'))
         style.map('ToggleOff.TButton', background=[('active', '#F1F5F9')])
         style.configure('Segment.TButton', background=CARD, foreground=MUTED,
                         bordercolor='#CBD5E1', borderwidth=1, padding=(14, 8))
         style.map('Segment.TButton', background=[('active', '#F1F5F9')])
         style.configure('SegmentSelected.TButton', background='#DBEAFE', foreground='#1E40AF',
                         bordercolor=PRIMARY, borderwidth=1, padding=(14, 8),
-                        font=('Microsoft YaHei UI', 10, 'bold'))
+                        font=(UI_FONT, 10, 'bold'))
         style.map('SegmentSelected.TButton', background=[('active', '#BFDBFE')])
         style.configure('Primary.TButton', background=PRIMARY, foreground='#FFFFFF',
-                        borderwidth=0, padding=(17, 9), font=('Microsoft YaHei UI', 10, 'bold'))
+                        borderwidth=0, padding=(17, 9), font=(UI_FONT, 10, 'bold'))
         style.map('Primary.TButton', background=[('active', PRIMARY_DARK)])
         style.configure('Secondary.TButton', background=CARD, foreground=TEXT,
                         bordercolor='#CBD5E1', borderwidth=1, padding=(14, 8))
         style.map('Secondary.TButton', background=[('active', '#F1F5F9')])
         style.configure('Warning.TButton', background='#FEF2F2', foreground=WARNING,
                         bordercolor='#FCA5A5', borderwidth=1, padding=(14, 8),
-                        font=('Microsoft YaHei UI', 10, 'bold'))
+                        font=(UI_FONT, 10, 'bold'))
         style.map('Warning.TButton', background=[('active', '#FEE2E2')])
         style.configure('Treeview', background=CARD, fieldbackground=CARD, foreground=TEXT,
                         rowheight=34, bordercolor=BORDER, borderwidth=1)
         style.configure('Treeview.Heading', background='#F1F5F9', foreground=MUTED,
-                        font=('Microsoft YaHei UI', 9, 'bold'), relief='flat', padding=(8, 8))
+                        font=(UI_FONT, 9, 'bold'), relief='flat', padding=(8, 8))
         style.map('Treeview', background=[('selected', '#DBEAFE')],
                   foreground=[('selected', '#1E3A8A')])
 
@@ -234,7 +254,7 @@ class Window:
             guide,
             text='开启自动同步并保持本窗口运行；在 WorkBuddy 内切换账号后，等待下方状态提示同步完成。',
             background='#EFF6FF', foreground='#1E40AF', anchor='w',
-            font=('Microsoft YaHei UI', 10),
+            font=(UI_FONT, 10),
         ).pack(fill='x')
 
         metrics = ttk.Frame(page, style='App.TFrame')
@@ -272,40 +292,62 @@ class Window:
         scope.columnconfigure(0, weight=1)
         self.auto = tk.BooleanVar(value=self.cfg.auto_sync)
         self.all_sessions = tk.BooleanVar(value=self.cfg.session_ids is None)
-        auto_text = ttk.Frame(scope, style='Card.TFrame')
+        auto_row = ttk.Frame(scope, style='CardContent.TFrame')
+        auto_row.grid(row=0, column=0, sticky='ew')
+        auto_row.columnconfigure(0, weight=1)
+        self.auto_row = auto_row
+        auto_text = ttk.Frame(auto_row, style='CardContent.TFrame')
         auto_text.grid(row=0, column=0, sticky='w')
         ttk.Label(auto_text, text='自动同步', style='CardBody.TLabel').pack(anchor='w')
         ttk.Label(
             auto_text, text='检测到 WorkBuddy 账号切换后，自动把所选范围同步给新账号',
             style='MutedCard.TLabel',
         ).pack(anchor='w', pady=(3, 0))
-        self.auto_button = ttk.Button(scope, command=self.toggle_auto, width=18)
-        self.auto_button.grid(row=0, column=1, sticky='e', padx=(20, 0))
+        self.auto_button = ttk.Button(auto_row, command=self.toggle_auto, width=18)
+        self.auto_button.grid(row=0, column=1, sticky='e', padx=(24, 0))
 
-        scope_text = ttk.Frame(scope, style='Card.TFrame')
-        scope_text.grid(row=1, column=0, sticky='w', pady=(14, 0))
+        self.scope_separator = ttk.Separator(scope, style='Card.TSeparator')
+        self.scope_separator.grid(row=1, column=0, sticky='ew', pady=14)
+
+        scope_row = ttk.Frame(scope, style='CardContent.TFrame')
+        scope_row.grid(row=2, column=0, sticky='ew')
+        scope_row.columnconfigure(0, weight=1)
+        self.scope_row = scope_row
+        scope_text = ttk.Frame(scope_row, style='CardContent.TFrame')
+        scope_text.grid(row=0, column=0, sticky='w')
         ttk.Label(scope_text, text='同步范围', style='CardBody.TLabel').pack(anchor='w')
         ttk.Label(
             scope_text, text='默认同步全部普通会话，也可以改为手动选择',
             style='MutedCard.TLabel',
         ).pack(anchor='w', pady=(3, 0))
-        scope_choices = ttk.Frame(scope, style='Card.TFrame')
-        scope_choices.grid(row=1, column=1, sticky='e', padx=(20, 0), pady=(14, 0))
         self.all_scope_button = ttk.Button(
-            scope_choices, text='全部会话（推荐）', width=18,
+            scope_row, text='全部会话（推荐）', width=18,
             command=lambda: self.set_scope(True),
         )
-        self.all_scope_button.pack(side='left')
+        self.all_scope_button.grid(row=0, column=1, sticky='e', padx=(24, 0))
         self.selected_scope_button = ttk.Button(
-            scope_choices, text='仅选中的会话', width=18,
+            scope_row, text='仅选中的会话', width=18,
             command=lambda: self.set_scope(False),
         )
-        self.selected_scope_button.pack(side='left', padx=(6, 0))
+        self.selected_scope_button.grid(row=0, column=2, sticky='e', padx=(6, 0))
 
-        bulk_actions = ttk.Frame(scope, style='Card.TFrame')
-        bulk_actions.grid(row=2, column=0, sticky='w', pady=(14, 0))
+        scope_meta = ttk.Frame(scope, style='CardContent.TFrame')
+        scope_meta.grid(row=3, column=0, sticky='ew', pady=(12, 0))
+        scope_meta.columnconfigure(0, weight=1)
+        self.scope_hint = tk.StringVar()
+        ttk.Label(
+            scope_meta, textvariable=self.scope_hint, style='MutedCard.TLabel',
+        ).grid(row=0, column=0, sticky='w')
+        self.selection_summary = tk.StringVar(value='全部 0')
+        ttk.Label(
+            scope_meta, textvariable=self.selection_summary, style='MutedCard.TLabel',
+        ).grid(row=0, column=1, sticky='e', padx=(20, 0))
+
+        bulk_actions = ttk.Frame(scope, style='CardContent.TFrame')
+        bulk_actions.grid(row=4, column=0, sticky='w', pady=(10, 0))
+        self.bulk_actions = bulk_actions
         self.select_all_button = ttk.Button(
-            bulk_actions, text='全选当前会话', command=self.select_all_sessions,
+            bulk_actions, text='全选列表', command=self.select_all_sessions,
             style='Secondary.TButton',
         )
         self.select_all_button.pack(side='left')
@@ -314,16 +356,18 @@ class Window:
             style='Secondary.TButton',
         )
         self.clear_selection_button.pack(side='left', padx=(6, 0))
-        self.selection_summary = tk.StringVar(value='全部 0')
-        ttk.Label(scope, textvariable=self.selection_summary, style='MutedCard.TLabel').grid(
-            row=2, column=1, sticky='e', padx=(20, 0), pady=(14, 0))
         self._update_auto_control()
 
         table_card = self._card(page, row=3, column=0, sticky='nsew')
         table_card.columnconfigure(0, weight=1)
-        table_card.rowconfigure(1, weight=1)
+        table_card.rowconfigure(2, weight=1)
         ttk.Label(table_card, text='要接管的会话', style='AccountName.TLabel').grid(
-            row=0, column=0, sticky='w', pady=(0, 10))
+            row=0, column=0, sticky='w')
+        ttk.Label(
+            table_card,
+            text='只显示未归档的普通会话；在 WorkBuddy 归档后会自动移出，不再参与同步。',
+            style='MutedCard.TLabel',
+        ).grid(row=1, column=0, sticky='w', pady=(4, 10))
         self.tree = ttk.Treeview(
             table_card, columns=('selected', 'title', 'owner', 'id'), show='headings',
             selectmode='browse', height=8,
@@ -334,24 +378,36 @@ class Window:
         ]:
             self.tree.heading(key, text=title)
             self.tree.column(key, width=width, minwidth=50, stretch=stretch)
-        self.tree.grid(row=1, column=0, sticky='nsew')
+        self.tree.grid(row=2, column=0, sticky='nsew')
         scrollbar = ttk.Scrollbar(table_card, orient='vertical', command=self.tree.yview)
-        scrollbar.grid(row=1, column=1, sticky='ns')
+        scrollbar.grid(row=2, column=1, sticky='ns')
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.bind('<Button-1>', self._on_tree_click, add='+')
         CellTooltip(self.tree, self._main_tree_tooltip)
 
         actions = ttk.Frame(page, style='App.TFrame')
         actions.grid(row=4, column=0, sticky='ew', pady=(12, 0))
+        ttk.Label(
+            actions,
+            text=(
+                '保存设置：保存同步规则　｜　同步一次：立即应用到当前账号　｜　'
+                '刷新预览：只重新读取，不修改数据　｜　在 WorkBuddy 中打开：打开高亮的一条会话'
+            ),
+            style='Subtitle.TLabel',
+        ).pack(anchor='w', pady=(0, 8))
+        action_buttons = ttk.Frame(actions, style='App.TFrame')
+        action_buttons.pack(anchor='w')
         self.save_button = ttk.Button(
-            actions, text='保存设置', command=self.save, style='Primary.TButton')
+            action_buttons, text='保存设置', command=self.save, style='Primary.TButton')
         self.save_button.pack(side='left')
-        ttk.Button(actions, text='同步一次', command=self.sync, style='Secondary.TButton').pack(
+        ttk.Button(
+            action_buttons, text='同步一次', command=self.sync, style='Secondary.TButton',
+        ).pack(
             side='left', padx=(8, 0))
-        ttk.Button(actions, text='刷新预览', command=self.refresh,
+        ttk.Button(action_buttons, text='刷新预览', command=self.refresh,
                    style='Secondary.TButton').pack(side='left', padx=(8, 0))
         ttk.Button(
-            actions, text='在 WorkBuddy 中打开', command=self.open_selected,
+            action_buttons, text='在 WorkBuddy 中打开', command=self.open_selected,
             style='Secondary.TButton',
         ).pack(side='left', padx=(8, 0))
         self.toggle_scope()
@@ -366,7 +422,7 @@ class Window:
             note,
             text='账号名称来自 WorkBuddy 当前及历史登录快照；这里只读取账号名称和 ID，不展示登录凭据。',
             background='#F1F5F9', foreground=MUTED, anchor='w',
-            font=('Microsoft YaHei UI', 10),
+            font=(UI_FONT, 10),
         ).pack(fill='x')
 
         panes = ttk.Panedwindow(page, orient='horizontal')
@@ -616,9 +672,14 @@ class Window:
             style='SegmentSelected.TButton' if is_all else 'Segment.TButton')
         self.selected_scope_button.configure(
             style='Segment.TButton' if is_all else 'SegmentSelected.TButton')
-        bulk_state = 'disabled' if is_all else 'normal'
-        self.select_all_button.configure(state=bulk_state)
-        self.clear_selection_button.configure(state=bulk_state)
+        if is_all:
+            self.bulk_actions.grid_remove()
+            self.select_all_button.pack_forget()
+            self.clear_selection_button.pack_forget()
+        else:
+            self.bulk_actions.grid()
+            self.select_all_button.pack(side='left')
+            self.clear_selection_button.pack(side='left', padx=(6, 0))
         self._update_scope_summary(len(self.tree.get_children()))
 
     def set_scope(self, all_sessions):
@@ -664,11 +725,14 @@ class Window:
         if self.all_sessions.get():
             text = f'全部 {total}'
             shared = total
+            hint = f'当前已包含全部 {total} 个未归档普通会话，无需手动选择。'
         else:
             shared = sum(item in self.selected_sessions for item in self.tree.get_children())
             text = f'已选 {shared} / {total}'
+            hint = '点击表格左侧复选框选择会话，也可以全选或清空当前列表。'
         self.selection_summary.set(text)
         self.shared_count.set(str(shared))
+        self.scope_hint.set(hint)
 
     def _on_tree_click(self, event):
         if self.all_sessions.get() or self.tree.identify_column(event.x) != '#1':
@@ -726,7 +790,7 @@ class Window:
         try:
             if self.cfg.auto_sync:
                 self.display_result(self.engine.tick())
-                self.refresh()
+            self.refresh()
         except (SyncError, OSError, sqlite3.Error, ValueError) as exc:
             self.show_error(exc)
         self.root.after(self.cfg.poll_seconds * 1000, self.poll)
@@ -762,6 +826,7 @@ class Window:
 
 
 def launch(config_path):
+    enable_windows_dpi_awareness()
     root = tk.Tk()
     Window(root, config_path)
     root.mainloop()

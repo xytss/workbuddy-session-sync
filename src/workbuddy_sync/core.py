@@ -138,7 +138,9 @@ class Engine:
         db = sqlite3.connect(self.database.as_uri() + '?mode=' + mode, uri=True, timeout=2)
         db.row_factory = sqlite3.Row
         columns = {r['name'] for r in db.execute('PRAGMA table_info(sessions)')}
-        if not {'id', 'user_id', 'title', 'deleted_at', 'is_background_automation'} <= columns:
+        if not {
+            'id', 'user_id', 'title', 'status', 'deleted_at', 'is_background_automation'
+        } <= columns:
             db.close()
             raise SyncError('数据库结构不符合 WorkBuddy 5.5.2 会话格式，已停止操作。')
         return db
@@ -146,6 +148,7 @@ class Engine:
     def all_rows(self, db):
         return [dict(row) for row in db.execute(
             'SELECT id,user_id,title FROM sessions WHERE deleted_at IS NULL '
+            "AND status <> 'archived' "
             'AND COALESCE(is_background_automation,0)=0 ORDER BY id'
         )]
 

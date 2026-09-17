@@ -3,6 +3,8 @@ import json
 import os
 import sqlite3
 import subprocess
+import time
+import tkinter.font as tkfont
 from pathlib import Path
 
 from test_core import api, owners, settings, setup_data
@@ -15,20 +17,52 @@ def test_double_click_batch_starts_gui_from_project_directory(sandbox):
     fake_bin.mkdir()
     capture = sandbox / 'launch.txt'
     (fake_bin / 'uv.cmd').write_text(
-        '@echo off\r\n> "%BAT_CAPTURE%" echo %CD%^|%*\r\n', encoding='ascii')
+        '@echo off\r\n'
+        '> "%BAT_CAPTURE%" echo %CD%^|%*\r\n'
+        'ping -n 4 127.0.0.1 >nul\r\n',
+        encoding='ascii',
+    )
     environment = os.environ.copy()
     environment['PATH'] = str(fake_bin) + os.pathsep + environment['PATH']
     environment['BAT_CAPTURE'] = str(capture)
 
+    started = time.monotonic()
     result = subprocess.run(
         ['cmd.exe', '/d', '/c', str(launcher)], cwd=sandbox, env=environment,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
     )
+    elapsed = time.monotonic() - started
 
     assert result.returncode == 0
+    deadline = time.monotonic() + 2
+    while not capture.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
     launched_from, arguments = capture.read_text().strip().split('|', 1)
     assert Path(launched_from).resolve() == project
     assert arguments == 'run --locked workbuddy-sync gui'
+    assert elapsed < 1.5, '启动脚本应在后台启动 GUI 后立即关闭黑色命令窗口'
+
+
+def test_gui_enables_windows_dpi_awareness_before_creating_root(monkeypatch, sandbox):
+    desktop_ui = importlib.import_module('workbuddy_sync.desktop_ui')
+    events = []
+
+    class FakeRoot:
+        def mainloop(self):
+            events.append('mainloop')
+
+    monkeypatch.setattr(
+        desktop_ui, 'enable_windows_dpi_awareness', lambda: events.append('dpi'))
+    monkeypatch.setattr(
+        desktop_ui.tk, 'Tk', lambda: events.append('root') or FakeRoot())
+    monkeypatch.setattr(
+        desktop_ui, 'Window', lambda root, path: events.append(('window', root, path)))
+
+    config_path = sandbox / 'settings.json'
+    desktop_ui.launch(config_path)
+
+    assert events[0:2] == ['dpi', 'root']
+    assert events[-1] == 'mainloop'
 
 
 def cli():
@@ -110,6 +144,9 @@ def test_gui_navigation_has_stable_size_and_toggle_controls_have_no_x(sandbox, t
     settings(sandbox, home, auth).save(path)
     window = gui.Window(tk_root, path)
 
+    assert tkfont.nametofont('TkDefaultFont', root=tk_root).actual('family') == (
+        'Microsoft YaHei UI'
+    )
     assert {button.cget('width') for button in window.nav_buttons} == {14}
     assert window.nav_buttons[0].cget('style') == 'NavSelected.TButton'
     assert window.auto_button.winfo_class() == 'TButton'
@@ -164,6 +201,41 @@ def test_selected_scope_can_select_or_clear_all_visible_sessions(sandbox, tk_roo
     assert window.selection_summary.get() == '已选 0 / 2'
 
 
+def test_bulk_selection_controls_only_appear_in_selected_scope(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+
+    assert window.select_all_button.winfo_manager() == ''
+    assert window.clear_selection_button.winfo_manager() == ''
+    assert window.bulk_actions.winfo_manager() == ''
+    assert '无需手动选择' in window.scope_hint.get()
+
+    window.set_scope(False)
+
+    assert window.select_all_button.winfo_manager() == 'pack'
+    assert window.clear_selection_button.winfo_manager() == 'pack'
+    assert window.bulk_actions.winfo_manager() == 'grid'
+    assert '表格左侧' in window.scope_hint.get()
+
+
+def test_sync_settings_are_grouped_as_borderless_rows_inside_one_card(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+
+    assert window.scope_card.cget('style') == 'Card.TFrame'
+    assert window.auto_row.cget('style') == 'CardContent.TFrame'
+    assert window.scope_row.cget('style') == 'CardContent.TFrame'
+    assert window.auto_button.master == window.auto_row
+    assert window.all_scope_button.master == window.scope_row
+    assert window.scope_separator.winfo_manager() == 'grid'
+
+
 def test_long_ids_are_shortened_for_tables():
     gui = importlib.import_module('workbuddy_sync.gui')
     assert gui.short_id('dcb78cfa-f171-49c9-b936-c8b4b874b416') == 'dcb78cfa…b416'
@@ -195,6 +267,26 @@ def test_gui_refresh_keeps_selection_and_reattaches_session(
     assert 's1' not in window.tree.get_children()
     with sqlite3.connect(home / 'workbuddy.db') as db:
         db.execute("UPDATE sessions SET deleted_at=NULL WHERE id='s1'")
+    window.refresh()
+    assert 's1' in window.tree.get_children()
+
+
+def test_gui_refresh_hides_archived_session_and_restores_unarchived_session(
+    sandbox, tk_root,
+):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute("UPDATE sessions SET status='archived' WHERE id='s1'")
+    window.refresh()
+    assert 's1' not in window.tree.get_children()
+
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute("UPDATE sessions SET status='completed' WHERE id='s1'")
     window.refresh()
     assert 's1' in window.tree.get_children()
 

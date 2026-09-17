@@ -20,11 +20,20 @@ def setup_data(root):
             CREATE TABLE sessions (
                 id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT,
                 deleted_at INTEGER, is_background_automation INTEGER,
-                updated_at INTEGER, cwd TEXT);
-            INSERT INTO sessions VALUES ('s1','A','对话',NULL,0,1,'F:/Code');
-            INSERT INTO sessions VALUES ('s2','B','另一对话',NULL,0,2,'F:/Code');
-            INSERT INTO sessions VALUES ('hidden','A','已归档',123,0,3,'F:/Code');
-            INSERT INTO sessions VALUES ('auto','A','定时任务',NULL,1,4,'F:/Code');
+                updated_at INTEGER, cwd TEXT,
+                status TEXT NOT NULL DEFAULT 'completed');
+            INSERT INTO sessions
+                (id,user_id,title,deleted_at,is_background_automation,updated_at,cwd)
+                VALUES ('s1','A','对话',NULL,0,1,'F:/Code');
+            INSERT INTO sessions
+                (id,user_id,title,deleted_at,is_background_automation,updated_at,cwd)
+                VALUES ('s2','B','另一对话',NULL,0,2,'F:/Code');
+            INSERT INTO sessions
+                (id,user_id,title,deleted_at,is_background_automation,updated_at,cwd)
+                VALUES ('hidden','A','已归档',123,0,3,'F:/Code');
+            INSERT INTO sessions
+                (id,user_id,title,deleted_at,is_background_automation,updated_at,cwd)
+                VALUES ('auto','A','定时任务',NULL,1,4,'F:/Code');
             CREATE TABLE session_usage (session_id TEXT, used INTEGER);
             INSERT INTO session_usage VALUES ('s1',12);
         ''')
@@ -184,6 +193,21 @@ def test_sessions_for_account_ignores_sync_selection_scope(sandbox):
     engine = api().Engine(cfg, running=lambda: False)
 
     assert [row['id'] for row in engine.sessions_for_account('B')] == ['s2']
+
+
+def test_archived_session_is_excluded_until_workbuddy_unarchives_it(sandbox):
+    home, auth = setup_data(sandbox)
+    engine = api().Engine(settings(sandbox, home, auth), running=lambda: False)
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute("UPDATE sessions SET status='archived' WHERE id='s1'")
+
+    assert [row['id'] for row in engine.preview().sessions] == ['s2']
+    assert engine.sessions_for_account('A') == []
+
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute("UPDATE sessions SET status='completed' WHERE id='s1'")
+
+    assert [row['id'] for row in engine.preview().sessions] == ['s1', 's2']
 
 
 def test_settings_roundtrip(sandbox):
