@@ -1,55 +1,62 @@
 # WorkBuddy 会话同步
 
-切换 WorkBuddy 账号后，继续使用原来的本地对话。
+![Platform](https://img.shields.io/badge/platform-Windows%2011-0078D4)
+![Python](https://img.shields.io/badge/python-3.12-3776AB)
+![WorkBuddy](https://img.shields.io/badge/WorkBuddy%20AI-5.5.2-2563EB)
 
-## 这个工具是做什么的？
+> 在 WorkBuddy 中切换账号后，继续使用这台电脑上原来的对话。
 
-假设你正在用 WorkBuddy 的账号 1 对话，后来账号 1 的额度用完了。
+当正在使用的账号额度用完时，你仍然需要在 WorkBuddy 中手动登录另一个账号。本工具会检测账号变化，
+把本机已有的普通对话交给新账号，让你从原来的会话继续，而不是重新开一个空白对话。
 
-正常情况下，切换到账号 2 后，账号 1 的对话可能不会出现在侧栏里。这个工具会检测你当前登录的账号，
-把本机已有的普通对话同步给新账号，让你可以从原来的对话继续，而不是重新开一个空白对话。
+```mermaid
+flowchart LR
+    A[账号 1 正在使用本地对话] --> B[在 WorkBuddy 中登录账号 2]
+    B --> C[工具检测到账号变化]
+    C --> D[同步本机会话归属]
+    D --> E[账号 2 打开原对话继续]
+```
 
-简单来说：
+本工具不会替你登录账号，也不会让多个账号同时在线。
 
-~~~text
-账号 1 额度用完
-        ↓
-在 WorkBuddy 中登录账号 2
-        ↓
-本工具自动同步本机对话
-        ↓
-用账号 2 打开原来的对话继续
-~~~
+## 主要功能
 
-它适合以下情况：
+- **自动同步**：检测到 WorkBuddy 切换账号后，自动同步设定范围内的会话。
+- **默认全选**：默认同步全部未归档普通会话，也可以只选择部分会话。
+- **账号识别**：显示当前账号名称、完整账号 ID 和本机登录过的账号。
+- **会话历史**：按账号查看当前归属的本地会话。
+- **操作前备份**：修改数据库前自动创建备份，可以恢复该次操作涉及的会话归属。
 
-- 一台 Windows 电脑上轮流使用多个 WorkBuddy 账号。
-- 切换账号后，希望继续本机原来的对话。
-- 不希望手动复制聊天内容，也不想生成多个重复对话。
+## 快速开始
 
-## 最简单的使用方法
+### 运行前准备
 
-使用前请确认电脑已经安装 uv。首次运行需要联网安装 Python 依赖。
+- Windows 11
+- WorkBuddy AI 5.5.2
+- [uv](https://docs.astral.sh/uv/)（首次运行需要联网安装 Python 依赖）
 
-1. 双击项目目录里的「启动GUI.bat」。
+### 启动
+
+下载项目后，双击项目目录中的 **`启动GUI.bat`**。启动脚本会在后台打开 GUI，
+黑色命令窗口不会持续停留。第一次运行可能需要等待 uv 完成环境准备。
+
+### 日常使用
+
+1. 在资源管理器中双击 `启动GUI.bat`。
 2. 在「同步概览」确认当前显示的账号名称和账号 ID 正确。
-3. 保持以下默认设置：
-   - 「自动同步：开启」
-   - 「全部会话（推荐）」
+3. 保持默认的「自动同步：开启」和「全部会话（推荐）」。
 4. 保持本工具运行，可以最小化窗口。
 5. 回到 WorkBuddy，正常退出账号 1，然后登录账号 2。
 6. 等待本工具提示“同步完成”。
-7. 在列表中选中原来的对话，点击「在 WorkBuddy 中打开」。
+7. 如果 WorkBuddy 侧栏没有立即刷新，在列表中高亮原来的对话，然后点击「在 WorkBuddy 中打开」。
 
 以后再切换账号时，重复第 4～7 步即可。
-
-> 本工具不会替你登录或切换账号。账号切换仍然要在 WorkBuddy 中完成。
 
 ## 同步哪些对话？
 
 ### 全部会话（推荐）
 
-这是默认模式。切换账号后，本机所有普通对话都会同步给当前账号，以后新建的对话也包括在内。
+这是默认模式。切换账号后，本机所有未归档普通对话都会同步给当前账号，以后新建的对话也包括在内。
 
 如果你的目标是“账号 1 用完就切账号 2，继续所有对话”，保持这个选项即可。
 
@@ -58,9 +65,17 @@
 如果不想同步全部对话，可以选择这个模式：
 
 - 点击每行最左侧的方框选择对话。
-- 「全选当前会话」会选择列表里的全部对话。
+- 「全选列表」会选择列表里的全部对话。
 - 「清空选择」会取消全部选择。
 - 选择完成后点击「保存设置」。
+
+### 哪些会话不会同步？
+
+- 已归档的会话
+- 已删除的会话
+- WorkBuddy 后台自动化任务
+
+在 WorkBuddy 中归档会话后，它会在工具下一次刷新时移出列表，不再参与同步。取消归档后会重新出现。
 
 ## 三个页面分别有什么用？
 
@@ -86,6 +101,17 @@
 这里可以查看 WorkBuddy 数据位置、打开备份目录，或者在同步结果不符合预期时恢复之前的账号归属。
 
 恢复前请完全退出 WorkBuddy，包括托盘和后台进程。
+
+## 按钮是什么意思？
+
+| 按钮 | 作用 | 是否修改数据 |
+| --- | --- | --- |
+| 保存设置 | 保存自动同步开关和同步范围 | 只修改工具设置 |
+| 同步一次 | 立即把当前同步范围应用给当前账号 | 是 |
+| 刷新预览 | 重新读取账号和会话列表 | 否 |
+| 在 WorkBuddy 中打开 | 打开表格中高亮的一条会话 | 否 |
+| 恢复归属 | 从备份恢复某次同步涉及的账号归属 | 是 |
+| 打开备份目录 | 打开本工具保存备份的位置 | 否 |
 
 ## 常见问题
 
@@ -118,7 +144,7 @@ WorkBuddy 的侧栏有时不会立即刷新。回到本工具，在会话列表�
 
 ### 所有类型的对话都会同步吗？
 
-不会。已删除的对话和后台自动化任务不会参与同步。
+不会。已归档、已删除的对话和后台自动化任务不会参与同步。
 
 ### 一定能保留全部上下文吗？
 
@@ -148,21 +174,24 @@ WorkBuddy 的侧栏有时不会立即刷新。回到本工具，在会话列表�
 
 普通用户不需要阅读下面的内容。
 
+<details>
+<summary>展开命令行、数据位置、恢复与测试说明</summary>
+
 ### 命令行
 
 ~~~powershell
 # 查看当前账号和本机会话，不修改数据库
-uv run workbuddy-sync diagnose
+uv run --locked workbuddy-sync diagnose
 
 # 立即同步一次
-uv run workbuddy-sync sync
+uv run --locked workbuddy-sync sync
 
 # 开启自动同步并持续运行
-uv run workbuddy-sync configure --auto-sync 'on' --scope 'all'
-uv run workbuddy-sync watch
+uv run --locked workbuddy-sync configure --auto-sync 'on' --scope 'all'
+uv run --locked workbuddy-sync watch
 
 # 关闭自动同步
-uv run workbuddy-sync configure --auto-sync 'off'
+uv run --locked workbuddy-sync configure --auto-sync 'off'
 ~~~
 
 不要同时运行 GUI 和 watch。
@@ -185,7 +214,7 @@ WorkBuddy 数据库：%USERPROFILE%/.workbuddy-ai/workbuddy.db
 建议在 GUI 的「设置与恢复」页面操作。也可以运行：
 
 ~~~powershell
-uv run workbuddy-sync restore 'state/backups/具体备份目录'
+uv run --locked workbuddy-sync restore 'state/backups/具体备份目录'
 ~~~
 
 恢复只还原该次操作涉及的账号归属，不覆盖后来产生的新消息和新标题。
@@ -193,8 +222,10 @@ uv run workbuddy-sync restore 'state/backups/具体备份目录'
 ### 运行测试
 
 ~~~powershell
-uv run pytest -q
-uv run ruff check .
+uv run --locked pytest -q
+uv run --locked ruff check .
 ~~~
 
 测试使用模拟数据库，不修改真实 WorkBuddy 数据。
+
+</details>
