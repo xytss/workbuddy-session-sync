@@ -1,0 +1,228 @@
+import importlib
+import json
+import os
+import sqlite3
+import subprocess
+from pathlib import Path
+
+from test_core import api, owners, settings, setup_data
+
+
+def test_double_click_batch_starts_gui_from_project_directory(sandbox):
+    project = Path(__file__).resolve().parents[1]
+    launcher = project / '启动GUI.bat'
+    fake_bin = sandbox / 'bin'
+    fake_bin.mkdir()
+    capture = sandbox / 'launch.txt'
+    (fake_bin / 'uv.cmd').write_text(
+        '@echo off\r\n> "%BAT_CAPTURE%" echo %CD%^|%*\r\n', encoding='ascii')
+    environment = os.environ.copy()
+    environment['PATH'] = str(fake_bin) + os.pathsep + environment['PATH']
+    environment['BAT_CAPTURE'] = str(capture)
+
+    result = subprocess.run(
+        ['cmd.exe', '/d', '/c', str(launcher)], cwd=sandbox, env=environment,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+
+    assert result.returncode == 0
+    launched_from, arguments = capture.read_text().strip().split('|', 1)
+    assert Path(launched_from).resolve() == project
+    assert arguments == 'run --locked workbuddy-sync gui'
+
+
+def cli():
+    assert importlib.util.find_spec('workbuddy_sync.cli'), '尚未实现命令行'
+    return importlib.import_module('workbuddy_sync.cli')
+
+
+def test_diagnose_is_readonly_and_redacts_auth(sandbox, capsys):
+    home, auth = setup_data(sandbox)
+    cfg = settings(sandbox, home, auth)
+    path = sandbox / 'settings.json'
+    cfg.save(path)
+    assert cli().main(['--config', str(path), 'diagnose']) == 0
+    output = capsys.readouterr().out
+    assert 'secret' not in output
+    assert json.loads(output)['target'] == 'A'
+    assert owners(home)['s2'] == 'B'
+
+
+def test_configure_enables_auto_and_selected_sessions(sandbox):
+    path = sandbox / 'settings.json'
+    assert cli().main(['--config', str(path), 'configure', '--auto-sync', 'on',
+                       '--scope', 'selected', '--session-id', 's1']) == 0
+    cfg = api().Settings.load(path)
+    assert cfg.auto_sync
+    assert cfg.session_ids == ['s1']
+
+
+def test_gui_settings_and_preview(sandbox, tk_root):
+    assert importlib.util.find_spec('workbuddy_sync.gui'), '尚未实现设置界面'
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    cfg = settings(sandbox, home, auth)
+    path = sandbox / 'settings.json'
+    cfg.save(path)
+    window = gui.Window(tk_root, path)
+    window.refresh()
+    assert len(window.tree.get_children()) == 2
+    window.display_result(api().Result('switching'))
+    assert '切换' in window.status.get()
+    window.display_result(api().Result('busy'))
+    assert '下一轮' in window.status.get()
+    window.auto.set(True)
+    window.save()
+    assert api().Settings.load(path).auto_sync
+    window.auto.set(False)
+    window.save()
+
+
+def test_gui_uses_three_pages_and_shows_account_name_and_history(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    current_uid = 'dcb78cfa-f171-49c9-b936-c8b4b874b416'
+    auth.write_text(json.dumps({'account': {'uid': current_uid, 'nickname': 'Alice'}}))
+    auth.with_name('auth.2026-09-16.info').write_text(
+        json.dumps({'account': {'uid': 'B', 'nickname': 'Bob'}}))
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+    assert [window.notebook.tab(tab, 'text') for tab in window.notebook.tabs()] == [
+        '同步概览', '账号历史', '设置与恢复',
+    ]
+    assert window.current_account_name.get() == 'Alice'
+    assert window.current_account_id.get() == current_uid
+    assert set(window.account_tree.get_children()) == {current_uid, 'B'}
+    window.account_tree.selection_set('B')
+    window.show_account_history()
+    assert window.history_account_name.get() == 'Bob'
+    assert window.history_account_id.get() == 'B'
+    assert window.history_tree.get_children() == ('s2',)
+    assert window.save_button.cget('style') == 'Primary.TButton'
+    assert window.restore_button.cget('style') == 'Warning.TButton'
+
+
+def test_gui_navigation_has_stable_size_and_toggle_controls_have_no_x(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+
+    assert {button.cget('width') for button in window.nav_buttons} == {14}
+    assert window.nav_buttons[0].cget('style') == 'NavSelected.TButton'
+    assert window.auto_button.winfo_class() == 'TButton'
+    assert window.auto_button.cget('text') == '自动同步：开启'
+    assert window.all_scope_button.winfo_class() == 'TButton'
+    assert window.all_scope_button.cget('style') == 'SegmentSelected.TButton'
+    assert window.tree.cget('displaycolumns') == ('title', 'owner', 'id')
+
+    window.show_page(1)
+
+    assert {button.cget('width') for button in window.nav_buttons} == {14}
+    assert window.nav_buttons[0].cget('style') == 'Nav.TButton'
+    assert window.nav_buttons[1].cget('style') == 'NavSelected.TButton'
+
+
+def test_selected_scope_uses_visible_checkbox_column(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+    window.all_sessions.set(False)
+    window.toggle_scope()
+    assert window.tree.cget('displaycolumns')[0] == 'selected'
+    window.toggle_session('s1')
+    assert window.selection_summary.get() == '已选 1 / 2'
+    assert window.tree.set('s1', 'selected') == '☑'
+    window.save()
+    assert api().Settings.load(path).session_ids == ['s1']
+    window.all_sessions.set(True)
+    window.toggle_scope()
+    assert 'selected' not in window.tree.cget('displaycolumns')
+
+
+def test_selected_scope_can_select_or_clear_all_visible_sessions(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+
+    window.set_scope(False)
+    window.select_all_sessions()
+
+    assert window.selected_sessions == {'s1', 's2'}
+    assert window.selection_summary.get() == '已选 2 / 2'
+    assert {window.tree.set(item, 'selected') for item in ('s1', 's2')} == {'☑'}
+
+    window.clear_selected_sessions()
+
+    assert window.selected_sessions == set()
+    assert window.selection_summary.get() == '已选 0 / 2'
+
+
+def test_long_ids_are_shortened_for_tables():
+    gui = importlib.import_module('workbuddy_sync.gui')
+    assert gui.short_id('dcb78cfa-f171-49c9-b936-c8b4b874b416') == 'dcb78cfa…b416'
+    assert gui.short_id('short') == 'short'
+
+
+def test_gui_refresh_keeps_selection_and_reattaches_session(
+    sandbox, monkeypatch, tk_root,
+):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    opened = []
+    monkeypatch.setattr(gui.os, 'startfile', opened.append)
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+    window.all_sessions.set(False)
+    window.toggle_scope()
+    window.toggle_session('s1')
+    window.save()
+    window.tree.selection_set(['s2'])
+    window.refresh()
+    assert window.tree.selection() == ('s2',)
+    window.open_selected()
+    assert opened == ['workbuddy://chat/s2']
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute("UPDATE sessions SET deleted_at=1 WHERE id='s1'")
+    window.refresh()
+    assert 's1' not in window.tree.get_children()
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute("UPDATE sessions SET deleted_at=NULL WHERE id='s1'")
+    window.refresh()
+    assert 's1' in window.tree.get_children()
+
+
+def test_account_changes_during_backup_rolls_back_for_next_tick(sandbox):
+    home, auth = setup_data(sandbox)
+    engine = api().Engine(settings(sandbox, home, auth), running=lambda: True)
+    make_backup = engine.make_backup
+
+    def switch_account(*args):
+        backup = make_backup(*args)
+        auth.write_text('{"account":{"uid":"B"}}')
+        return backup
+
+    engine.make_backup = switch_account
+    assert engine.sync().status == 'switching'
+    assert owners(home)['s2'] == 'B'
+
+
+def test_sql_failure_rolls_back_all_rows(sandbox):
+    home, auth = setup_data(sandbox)
+    auth.write_text('{"account":{"uid":"N"}}')
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute("CREATE TRIGGER reject_s2 BEFORE UPDATE ON sessions WHEN OLD.id='s2' "
+                   "BEGIN SELECT RAISE(ABORT,'test failure'); END")
+    engine = api().Engine(settings(sandbox, home, auth), running=lambda: False)
+    import pytest
+    with pytest.raises(sqlite3.IntegrityError):
+        engine.sync()
+    assert owners(home)['s1'] == 'A'
+    assert owners(home)['s2'] == 'B'
