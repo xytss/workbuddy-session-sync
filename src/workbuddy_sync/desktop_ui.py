@@ -114,8 +114,8 @@ class Window:
         self.current_account_full_id = ''
 
         root.title('WorkBuddy 会话同步')
-        root.geometry('1180x820')
-        root.minsize(980, 700)
+        root.geometry('1120x780')
+        root.minsize(920, 680)
         root.configure(background=BG)
         configure_default_fonts(root)
         self._configure_styles()
@@ -125,7 +125,7 @@ class Window:
         shell = ttk.Frame(root, style='App.TFrame', padding=(24, 20, 24, 16))
         shell.grid(sticky='nsew')
         shell.columnconfigure(0, weight=1)
-        shell.rowconfigure(2, weight=1)
+        shell.rowconfigure(3, weight=1)
 
         header = ttk.Frame(shell, style='App.TFrame')
         header.grid(row=0, column=0, sticky='ew', pady=(0, 16))
@@ -145,8 +145,31 @@ class Window:
             button.pack(side='left', padx=(0, 6))
             self.nav_buttons.append(button)
 
+        self.status_heading = tk.StringVar(
+            value='自动同步运行中' if self.cfg.auto_sync else '自动同步已关闭')
+        self.status = tk.StringVar(
+            value=(
+                '正在监测 WorkBuddy 账号变化，切换账号后会自动同步。'
+                if self.cfg.auto_sync else MESSAGES['disabled']
+            )
+        )
+        self.status_frame = tk.Frame(shell, background='#EFF6FF', padx=14, pady=10)
+        self.status_frame.grid(row=2, column=0, sticky='ew', pady=(0, 10))
+        self.status_frame.columnconfigure(1, weight=1)
+        tk.Label(
+            self.status_frame, textvariable=self.status_heading,
+            background='#EFF6FF', foreground='#1E40AF',
+            font=(UI_FONT, 10, 'bold'),
+        ).grid(row=0, column=0, sticky='w', padx=(0, 16))
+        self.status_label = tk.Label(
+            self.status_frame, textvariable=self.status,
+            background='#EFF6FF', foreground='#1E40AF', anchor='w', justify='left',
+            font=(UI_FONT, 10),
+        )
+        self.status_label.grid(row=0, column=1, sticky='ew')
+
         self.notebook = ttk.Notebook(shell, style='App.TNotebook')
-        self.notebook.grid(row=2, column=0, sticky='nsew')
+        self.notebook.grid(row=3, column=0, sticky='nsew')
         self.sync_page = ttk.Frame(self.notebook, style='App.TFrame', padding=(0, 16, 0, 0))
         self.history_page = ttk.Frame(
             self.notebook, style='App.TFrame', padding=(0, 16, 0, 0))
@@ -160,15 +183,6 @@ class Window:
         self._build_sync_page()
         self._build_history_page()
         self._build_settings_page()
-
-        self.status = tk.StringVar(value=MESSAGES['disabled'])
-        status_frame = tk.Frame(shell, background='#EFF6FF', padx=14, pady=10)
-        status_frame.grid(row=3, column=0, sticky='ew', pady=(14, 0))
-        self.status_label = tk.Label(
-            status_frame, textvariable=self.status, background='#EFF6FF', foreground='#1E40AF',
-            anchor='w', justify='left', font=(UI_FONT, 10),
-        )
-        self.status_label.pack(fill='x')
 
         self.refresh()
         root.after(self.cfg.poll_seconds * 1000, self.poll)
@@ -221,10 +235,18 @@ class Window:
         style.map('SegmentSelected.TButton', background=[('active', '#BFDBFE')])
         style.configure('Primary.TButton', background=PRIMARY, foreground='#FFFFFF',
                         borderwidth=0, padding=(17, 9), font=(UI_FONT, 10, 'bold'))
-        style.map('Primary.TButton', background=[('active', PRIMARY_DARK)])
+        style.map(
+            'Primary.TButton',
+            background=[('disabled', '#CBD5E1'), ('active', PRIMARY_DARK)],
+            foreground=[('disabled', '#64748B')],
+        )
         style.configure('Secondary.TButton', background=CARD, foreground=TEXT,
                         bordercolor='#CBD5E1', borderwidth=1, padding=(14, 8))
-        style.map('Secondary.TButton', background=[('active', '#F1F5F9')])
+        style.map(
+            'Secondary.TButton',
+            background=[('disabled', '#F1F5F9'), ('active', '#F1F5F9')],
+            foreground=[('disabled', '#94A3B8')],
+        )
         style.configure('Warning.TButton', background='#FEF2F2', foreground=WARNING,
                         bordercolor='#FCA5A5', borderwidth=1, padding=(14, 8),
                         font=(UI_FONT, 10, 'bold'))
@@ -250,24 +272,16 @@ class Window:
     def _build_sync_page(self):
         page = self.sync_page
         page.columnconfigure(0, weight=1)
-        page.rowconfigure(3, weight=1)
+        page.rowconfigure(2, weight=1)
 
-        guide = tk.Frame(page, background='#EFF6FF', padx=14, pady=10)
-        guide.grid(row=0, column=0, sticky='ew', pady=(0, 12))
-        tk.Label(
-            guide,
-            text='开启自动同步并保持本窗口运行；在 WorkBuddy 内切换账号后，等待下方状态提示同步完成。',
-            background='#EFF6FF', foreground='#1E40AF', anchor='w',
-            font=(UI_FONT, 10),
-        ).pack(fill='x')
+        summary = self._card(page, row=0, column=0, sticky='ew', pady=(0, 12))
+        summary.columnconfigure(0, weight=2)
+        summary.columnconfigure(2, weight=1)
+        summary.columnconfigure(4, weight=1)
+        self.summary_card = summary
 
-        metrics = ttk.Frame(page, style='App.TFrame')
-        metrics.grid(row=1, column=0, sticky='ew', pady=(0, 12))
-        metrics.columnconfigure(0, weight=2)
-        metrics.columnconfigure(1, weight=1)
-        metrics.columnconfigure(2, weight=1)
-
-        account_card = self._card(metrics, row=0, column=0, sticky='nsew', padx=(0, 8))
+        account_card = ttk.Frame(summary, style='CardContent.TFrame')
+        account_card.grid(row=0, column=0, sticky='nsew', padx=(0, 18))
         self.current_account_name = tk.StringVar(value='未登录')
         self.current_account_id = tk.StringVar(value='—')
         ttk.Label(account_card, text='当前登录账号', style='CardTitle.TLabel').pack(anchor='w')
@@ -278,20 +292,24 @@ class Window:
             account_card, textvariable=self.current_account_id, style='Mono.TLabel',
         ).pack(anchor='w')
 
-        sessions_card = self._card(metrics, row=0, column=1, sticky='nsew', padx=4)
+        ttk.Separator(summary, orient='vertical').grid(row=0, column=1, sticky='ns')
+        sessions_card = ttk.Frame(summary, style='CardContent.TFrame', padding=(18, 0))
+        sessions_card.grid(row=0, column=2, sticky='nsew')
         self.available_count = tk.StringVar(value='0')
         ttk.Label(sessions_card, text='可用会话', style='CardTitle.TLabel').pack(anchor='w')
         ttk.Label(
             sessions_card, textvariable=self.available_count, style='Metric.TLabel',
         ).pack(anchor='w', pady=(8, 0))
 
-        shared_card = self._card(metrics, row=0, column=2, sticky='nsew', padx=(8, 0))
+        ttk.Separator(summary, orient='vertical').grid(row=0, column=3, sticky='ns')
+        shared_card = ttk.Frame(summary, style='CardContent.TFrame', padding=(18, 0, 0, 0))
+        shared_card.grid(row=0, column=4, sticky='nsew')
         self.shared_count = tk.StringVar(value='0')
         ttk.Label(shared_card, text='共享范围', style='CardTitle.TLabel').pack(anchor='w')
         ttk.Label(shared_card, textvariable=self.shared_count, style='Metric.TLabel').pack(
             anchor='w', pady=(8, 0))
 
-        scope = self._card(page, row=2, column=0, sticky='ew', pady=(0, 12))
+        scope = self._card(page, row=1, column=0, sticky='ew', pady=(0, 12))
         self.scope_card = scope
         scope.columnconfigure(0, weight=1)
         self.auto = tk.BooleanVar(value=self.cfg.auto_sync)
@@ -362,7 +380,7 @@ class Window:
         self.clear_selection_button.pack(side='left', padx=(6, 0))
         self._update_auto_control()
 
-        table_card = self._card(page, row=3, column=0, sticky='nsew')
+        table_card = self._card(page, row=2, column=0, sticky='nsew')
         table_card.columnconfigure(0, weight=1)
         table_card.rowconfigure(2, weight=1)
         ttk.Label(table_card, text='要接管的会话', style='AccountName.TLabel').grid(
@@ -390,30 +408,27 @@ class Window:
         CellTooltip(self.tree, self._main_tree_tooltip)
 
         actions = ttk.Frame(page, style='App.TFrame')
-        actions.grid(row=4, column=0, sticky='ew', pady=(12, 0))
-        ttk.Label(
-            actions,
-            text=(
-                '保存设置：保存同步规则　｜　同步一次：立即应用到当前账号　｜　'
-                '刷新预览：只重新读取，不修改数据　｜　在 WorkBuddy 中打开：打开高亮的一条会话'
-            ),
-            style='Subtitle.TLabel',
-        ).pack(anchor='w', pady=(0, 8))
+        actions.grid(row=3, column=0, sticky='ew', pady=(12, 0))
+        actions.columnconfigure(0, weight=1)
         action_buttons = ttk.Frame(actions, style='App.TFrame')
-        action_buttons.pack(anchor='w')
-        self.save_button = ttk.Button(
-            action_buttons, text='保存设置', command=self.save, style='Primary.TButton')
-        self.save_button.pack(side='left')
-        ttk.Button(
-            action_buttons, text='同步一次', command=self.sync, style='Secondary.TButton',
-        ).pack(
-            side='left', padx=(8, 0))
-        ttk.Button(action_buttons, text='刷新预览', command=self.refresh,
-                   style='Secondary.TButton').pack(side='left', padx=(8, 0))
-        ttk.Button(
+        action_buttons.grid(row=0, column=0, sticky='w')
+        self.sync_button = ttk.Button(
+            action_buttons, text='立即同步', command=self.sync, style='Primary.TButton',
+        )
+        self.sync_button.pack(side='left')
+        self.refresh_button = ttk.Button(
+            action_buttons, text='重新读取', command=self.refresh, style='Secondary.TButton',
+        )
+        self.refresh_button.pack(side='left', padx=(8, 0))
+        self.open_button = ttk.Button(
             action_buttons, text='在 WorkBuddy 中打开', command=self.open_selected,
             style='Secondary.TButton',
-        ).pack(side='left', padx=(8, 0))
+        )
+        self.open_button.pack(side='left', padx=(8, 0))
+        ttk.Label(
+            actions, text='同步规则会自动保存', style='Subtitle.TLabel',
+        ).grid(row=0, column=1, sticky='e', pady=9)
+        self.tree.bind('<<TreeviewSelect>>', self._update_action_states, add='+')
         self.toggle_scope()
 
     def _build_history_page(self):
@@ -542,7 +557,7 @@ class Window:
         if path:
             (self.data_path if target == 0 else self.auth_path).set(path)
 
-    def save(self):
+    def save(self, announce=True):
         try:
             self.cfg.data_dir = Path(self.data_path.get()).resolve()
             self.cfg.auth_file = Path(self.auth_path.get()).resolve()
@@ -550,7 +565,10 @@ class Window:
             self.cfg.session_ids = None if self.all_sessions.get() else sorted(
                 self.selected_sessions)
             self.cfg.save(self.config_path)
-            self.status.set('设置已保存。' + ('自动同步已开启。' if self.cfg.auto_sync else '自动同步已关闭。'))
+            if announce:
+                self.status.set(
+                    '设置已保存。' + ('自动同步已开启。' if self.cfg.auto_sync else '自动同步已关闭。'))
+            self._update_status_heading()
         except (OSError, ValueError) as exc:
             self.show_error(exc)
 
@@ -603,6 +621,7 @@ class Window:
             self.available_count.set(str(len(result.sessions)))
             self._update_scope_summary(len(result.sessions))
             self._refresh_account_tree(display_engine, accounts)
+            self._update_action_states()
         except (SyncError, OSError, sqlite3.Error, ValueError) as exc:
             self.show_error(exc)
 
@@ -689,11 +708,24 @@ class Window:
     def set_scope(self, all_sessions):
         self.all_sessions.set(all_sessions)
         self.toggle_scope()
+        self.save(announce=False)
+        self.status.set(
+            '同步范围已设为全部未归档普通会话。'
+            if all_sessions else '同步范围已设为手动选择，会话勾选会自动保存。'
+        )
 
     def toggle_auto(self):
         self.auto.set(not self.auto.get())
         self._update_auto_control()
-        self.save()
+        self.save(announce=False)
+        self.status.set(
+            '正在监测 WorkBuddy 账号变化，切换账号后会自动同步。'
+            if self.auto.get() else MESSAGES['disabled']
+        )
+
+    def _update_status_heading(self):
+        self.status_heading.set(
+            '自动同步运行中' if self.auto.get() else '自动同步已关闭')
 
     def _update_auto_control(self):
         enabled = self.auto.get()
@@ -707,12 +739,16 @@ class Window:
         for item in self.tree.get_children():
             self.tree.set(item, 'selected', '☑')
         self._update_scope_summary(len(self.tree.get_children()))
+        self.save(announce=False)
+        self.status.set('已选择当前列表中的全部会话。')
 
     def clear_selected_sessions(self):
         self.selected_sessions.clear()
         for item in self.tree.get_children():
             self.tree.set(item, 'selected', '☐')
         self._update_scope_summary(len(self.tree.get_children()))
+        self.save(announce=False)
+        self.status.set('已清空手动选择的会话。')
 
     def toggle_session(self, session_id):
         if self.all_sessions.get() or not self.tree.exists(session_id):
@@ -724,6 +760,8 @@ class Window:
         self.tree.set(
             session_id, 'selected', '☑' if session_id in self.selected_sessions else '☐')
         self._update_scope_summary(len(self.tree.get_children()))
+        self.save(announce=False)
+        self.status.set('会话选择已自动保存。')
 
     def _update_scope_summary(self, total):
         if self.all_sessions.get():
@@ -756,13 +794,19 @@ class Window:
     def display_result(self, result):
         self.status.set(MESSAGES[result.status] + (
             f' 本次处理 {result.changed} 个会话。' if result.changed else ''))
+        if result.status == 'logged_out':
+            self.status_heading.set('等待登录 WorkBuddy')
+        elif result.status in ('switching', 'busy'):
+            self.status_heading.set('等待 WorkBuddy 完成操作')
+        else:
+            self._update_status_heading()
         if result.backup:
             self.last_backup = result.backup
         if result.status in ('synced', 'restored'):
             self.refresh()
 
     def sync(self):
-        self.save()
+        self.save(announce=False)
         try:
             self.display_result(self.engine.sync())
         except (SyncError, OSError, sqlite3.Error, ValueError) as exc:
@@ -770,11 +814,13 @@ class Window:
 
     def _selected_main_session(self):
         selected = self.tree.selection()
-        if len(selected) == 1:
-            return selected[0]
-        if not self.all_sessions.get() and len(self.selected_sessions) == 1:
-            return next(iter(self.selected_sessions))
-        return ''
+        return selected[0] if len(selected) == 1 else ''
+
+    def _update_action_states(self, _event=None):
+        self.open_button.state(
+            ['!disabled'] if len(self.tree.selection()) == 1 else ['disabled'])
+        can_sync = bool(self.current_account_full_id and self.tree.get_children())
+        self.sync_button.state(['!disabled'] if can_sync else ['disabled'])
 
     def open_selected(self):
         session_id = self._selected_main_session()
@@ -826,6 +872,8 @@ class Window:
     def show_error(self, exc):
         self.auto.set(False)
         self.cfg.auto_sync = False
+        self._update_auto_control()
+        self.status_heading.set('自动同步已暂停')
         self.status.set('已暂停自动同步：' + str(exc))
 
 

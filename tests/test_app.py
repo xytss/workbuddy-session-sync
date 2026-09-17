@@ -133,7 +133,6 @@ def test_gui_uses_three_pages_and_shows_account_name_and_history(sandbox, tk_roo
     assert window.history_account_name.get() == 'Bob'
     assert window.history_account_id.get() == 'B'
     assert window.history_tree.get_children() == ('s2',)
-    assert window.save_button.cget('style') == 'Primary.TButton'
     assert window.restore_button.cget('style') == 'Warning.TButton'
 
 
@@ -234,6 +233,55 @@ def test_sync_settings_are_grouped_as_borderless_rows_inside_one_card(sandbox, t
     assert window.auto_button.master == window.auto_row
     assert window.all_scope_button.master == window.scope_row
     assert window.scope_separator.winfo_manager() == 'grid'
+
+
+def test_overview_status_matches_auto_sync_and_actions_follow_selection(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth, auto_sync=True).save(path)
+
+    window = gui.Window(tk_root, path)
+
+    assert window.status_heading.get() == '自动同步运行中'
+    assert '监测' in window.status.get()
+    assert window.sync_button.cget('text') == '立即同步'
+    assert window.refresh_button.cget('text') == '重新读取'
+    assert window.open_button.instate(['disabled'])
+
+    window.tree.selection_set('s1')
+    window._update_action_states()
+    assert not window.open_button.instate(['disabled'])
+
+    window.tree.selection_remove('s1')
+    window._update_action_states()
+    assert window.open_button.instate(['disabled'])
+
+    window.toggle_auto()
+    assert window.status_heading.get() == '自动同步已关闭'
+    assert not api().Settings.load(path).auto_sync
+
+
+def test_overview_scope_and_session_selection_save_immediately(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+
+    window = gui.Window(tk_root, path)
+
+    assert not hasattr(window, 'save_button')
+    window.set_scope(False)
+    assert api().Settings.load(path).session_ids == []
+
+    window.toggle_session('s1')
+    assert api().Settings.load(path).session_ids == ['s1']
+
+    window.select_all_sessions()
+    assert api().Settings.load(path).session_ids == ['s1', 's2']
+
+    window.clear_selected_sessions()
+    assert api().Settings.load(path).session_ids == []
 
 
 def test_long_ids_are_shortened_for_tables():
