@@ -242,6 +242,24 @@ def test_long_ids_are_shortened_for_tables():
     assert gui.short_id('short') == 'short'
 
 
+def test_session_titles_with_line_breaks_stay_inside_one_table_row(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute(
+            "UPDATE sessions SET title=? WHERE id='s1'",
+            ('https://status.ciii.club/status/codex\n```\n回复微信公众号文章',),
+        )
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+
+    window = gui.Window(tk_root, path)
+
+    expected = 'https://status.ciii.club/status/codex ``` 回复微信公众号文章'
+    assert window.tree.set('s1', 'title') == expected
+    assert window.history_tree.set('s1', 'title') == expected
+
+
 def test_gui_refresh_keeps_selection_and_reattaches_session(
     sandbox, monkeypatch, tk_root,
 ):

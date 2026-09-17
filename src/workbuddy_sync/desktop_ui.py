@@ -38,6 +38,10 @@ def short_id(value: str) -> str:
     return value if len(value) <= 14 else value[:8] + '…' + value[-4:]
 
 
+def display_title(value: str | None) -> str:
+    return ' '.join(value.split()) if value else '未命名会话'
+
+
 def enable_windows_dpi_awareness():
     if os.name == 'nt':
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -582,7 +586,7 @@ class Window:
                 )
                 values = (
                     '☑' if session_id in self.selected_sessions else '☐',
-                    row['title'] or '未命名会话', owner_display, short_id(session_id),
+                    display_title(row['title']), owner_display, short_id(session_id),
                 )
                 if self.tree.exists(session_id):
                     self.tree.item(session_id, values=values)
@@ -643,7 +647,7 @@ class Window:
         rows = self.engine.sessions_for_account(uid)
         existing = set(self.history_tree.get_children())
         for row in rows:
-            values = (row['title'] or '未命名会话', short_id(row['id']))
+            values = (display_title(row['title']), short_id(row['id']))
             if self.history_tree.exists(row['id']):
                 self.history_tree.item(row['id'], values=values)
                 self.history_tree.move(row['id'], '', 'end')
