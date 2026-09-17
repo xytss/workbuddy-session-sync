@@ -9,6 +9,10 @@
 当正在使用的账号额度用完时，你仍然需要在 WorkBuddy 中手动登录另一个账号。本工具会检测账号变化，
 把本机已有的普通对话交给新账号，让你从原来的会话继续，而不是重新开一个空白对话。
 
+![WorkBuddy 会话同步的同步概览界面](docs/assets/sync-overview.png)
+
+*同步概览：截图使用脱敏的演示账号和会话数据。*
+
 ```mermaid
 flowchart LR
     A[账号 1 正在使用本地对话] --> B[在 WorkBuddy 中登录账号 2]
@@ -33,24 +37,32 @@ flowchart LR
 
 - Windows 11
 - WorkBuddy AI 5.5.2
-- [uv](https://docs.astral.sh/uv/)（首次运行需要联网安装 Python 依赖）
+- [uv](https://docs.astral.sh/uv/)（首次启动时会通过 uv 准备 Python 依赖）
 
 ### 启动
 
-下载项目后，双击项目目录中的 **`启动GUI.bat`**。启动脚本会在后台打开 GUI，
-黑色命令窗口不会持续停留。第一次运行可能需要等待 uv 完成环境准备。
+1. 安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，安装完成后重新打开资源管理器。
+2. 下载项目压缩包并解压，或使用 Git 克隆项目：
+
+   ```powershell
+   git clone 'https://github.com/xytss/workbuddy-session-sync.git'
+   ```
+
+3. 打开项目目录 `workbuddy-session-sync`。
+4. 双击目录中的 **`启动GUI.bat`**。
+
+启动脚本会在后台打开 GUI，黑色命令窗口不会持续停留。第一次启动需要等待 uv 准备运行环境。
 
 ### 日常使用
 
-1. 在资源管理器中双击 `启动GUI.bat`。
-2. 在「同步概览」确认当前显示的账号名称和账号 ID 正确。
-3. 保持默认的「自动同步：开启」和「全部会话（推荐）」。
-4. 保持本工具运行，可以最小化窗口。
-5. 回到 WorkBuddy，正常退出账号 1，然后登录账号 2。
-6. 等待本工具提示“同步完成”。
-7. 如果 WorkBuddy 侧栏没有立即刷新，在列表中高亮原来的对话，然后点击「在 WorkBuddy 中打开」。
+1. 在「同步概览」确认当前显示的账号名称和账号 ID 正确。
+2. 保持默认的「自动同步：开启」和「全部会话（推荐）」。
+3. 保持本工具运行，可以最小化窗口。
+4. 回到 WorkBuddy，正常退出账号 1，然后登录账号 2。
+5. 等待本工具提示“同步完成”。
+6. 如果 WorkBuddy 侧栏没有立即刷新，在列表中高亮原来的对话，然后点击「在 WorkBuddy 中打开」。
 
-以后再切换账号时，重复第 4～7 步即可。
+以后再切换账号时，重复第 3～6 步即可。
 
 ## 同步哪些对话？
 
