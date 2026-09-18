@@ -415,6 +415,22 @@ def test_action_buttons_show_help_on_hover(sandbox, tk_root):
         assert window.action_help.get() == '鼠标停留在按钮上查看说明 · 同步规则会自动保存'
 
 
+def test_action_help_keeps_the_bottom_bar_height_stable(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+    tk_root.update_idletasks()
+    action_bar = window.action_help_label.master
+    default_height = action_bar.winfo_reqheight()
+
+    window.action_help.set('这是一段较长的按钮功能说明。' * 20)
+    tk_root.update_idletasks()
+
+    assert action_bar.winfo_reqheight() == default_height
+
+
 def test_restored_window_keeps_enough_room_for_the_session_table(sandbox, tk_root):
     gui = importlib.import_module('workbuddy_sync.gui')
     home, auth = setup_data(sandbox)

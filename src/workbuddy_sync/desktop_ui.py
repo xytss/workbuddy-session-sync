@@ -437,9 +437,9 @@ class Window:
         )
         self.open_button.pack(side='left', padx=(8, 0))
         self.action_help = tk.StringVar(value=ACTION_HELP_DEFAULT)
-        self.action_help_label = ttk.Label(
-            actions, textvariable=self.action_help, style='Subtitle.TLabel',
-            anchor='w', justify='left', wraplength=520,
+        self.action_help_label = tk.Label(
+            actions, textvariable=self.action_help, background=BG, foreground=MUTED,
+            font=(UI_FONT, 10), anchor='w', justify='left', wraplength=520, height=2,
         )
         self.action_help_label.grid(
             row=0, column=1, sticky='ew', padx=(18, 0), pady=7)
