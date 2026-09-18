@@ -375,6 +375,38 @@ def test_action_buttons_show_help_on_hover(sandbox, tk_root):
         assert tooltip.tip is None
 
 
+def test_tooltip_flips_above_when_below_would_leave_the_screen():
+    desktop_ui = importlib.import_module('workbuddy_sync.desktop_ui')
+
+    assert desktop_ui.tooltip_y(100, 40, 50, 800) == 147
+    assert desktop_ui.tooltip_y(760, 40, 50, 800) == 703
+
+
+def test_restored_window_keeps_enough_room_for_the_session_table(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+
+    gui.Window(tk_root, path)
+
+    minimum_width, minimum_height = tk_root.minsize()
+    assert minimum_width >= 1100
+    assert minimum_height >= 860
+
+
+def test_account_and_session_id_columns_resist_clipping(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+
+    window = gui.Window(tk_root, path)
+
+    assert int(window.tree.column('owner', 'width')) >= 350
+    assert int(window.tree.column('id', 'width')) >= 350
+
+
 def test_long_ids_are_shortened_for_tables():
     gui = importlib.import_module('workbuddy_sync.gui')
     assert gui.short_id('dcb78cfa-f171-49c9-b936-c8b4b874b416') == 'dcb78cfa…b416'

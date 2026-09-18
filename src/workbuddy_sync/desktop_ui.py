@@ -21,6 +21,7 @@ BORDER = '#E2E8F0'
 WARNING = '#B91C1C'
 UI_FONT = 'Microsoft YaHei UI'
 MONO_FONT = 'Consolas'
+TOOLTIP_GAP = 7
 
 MESSAGES = {
     'disabled': '自动同步未开启。可以先预览，再同步一次。',
@@ -40,6 +41,13 @@ def short_id(value: str) -> str:
 
 def display_title(value: str | None) -> str:
     return ' '.join(value.split()) if value else '未命名会话'
+
+
+def tooltip_y(anchor_y, anchor_height, tip_height, screen_height):
+    below = anchor_y + anchor_height + TOOLTIP_GAP
+    if below + tip_height <= screen_height:
+        return below
+    return max(0, anchor_y - tip_height - TOOLTIP_GAP)
 
 
 def enable_windows_dpi_awareness():
@@ -116,13 +124,19 @@ class WidgetTooltip:
         self.hide()
         self.tip = tk.Toplevel(self.widget)
         self.tip.wm_overrideredirect(True)
-        x = self.widget.winfo_rootx()
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 7
-        self.tip.wm_geometry(f'+{x}+{y}')
+        self.tip.withdraw()
         tk.Label(
             self.tip, text=self.text, background='#0F172A', foreground='#FFFFFF',
             padx=10, pady=7, justify='left', wraplength=360, font=(UI_FONT, 9),
         ).pack()
+        self.tip.update_idletasks()
+        x = self.widget.winfo_rootx()
+        y = tooltip_y(
+            self.widget.winfo_rooty(), self.widget.winfo_height(),
+            self.tip.winfo_reqheight(), self.widget.winfo_screenheight(),
+        )
+        self.tip.wm_geometry(f'+{x}+{y}')
+        self.tip.deiconify()
 
     def hide(self, _event=None):
         if self.tip is not None:
@@ -143,8 +157,8 @@ class Window:
         self.current_account_full_id = ''
 
         root.title('WorkBuddy 会话同步')
-        root.geometry('1120x780')
-        root.minsize(920, 680)
+        root.geometry('1180x900')
+        root.minsize(1100, 860)
         root.configure(background=BG)
         configure_default_fonts(root)
         self._configure_styles()
@@ -427,10 +441,10 @@ class Window:
             selectmode='browse', height=8,
         )
         for key, title, width, minwidth, stretch in [
-            ('selected', '选择', 58, 58, False), ('title', '会话标题', 500, 240, True),
-            ('owner', '当前所属账号', 300, 280, False),
+            ('selected', '选择', 58, 58, False), ('title', '会话标题', 500, 180, True),
+            ('owner', '当前所属账号', 360, 340, False),
             ('owner_gap', '', 28, 28, False),
-            ('id', '会话 ID', 320, 300, False),
+            ('id', '会话 ID', 360, 340, False),
         ]:
             self.tree.heading(key, text=title)
             self.tree.column(key, width=width, minwidth=minwidth, stretch=stretch)
@@ -554,7 +568,7 @@ class Window:
         self.history_tree.heading('title', text='会话标题')
         self.history_tree.heading('id', text='会话 ID')
         self.history_tree.column('title', width=490, minwidth=220, stretch=True)
-        self.history_tree.column('id', width=310, minwidth=290, stretch=False)
+        self.history_tree.column('id', width=360, minwidth=340, stretch=False)
         self.history_tree.grid(row=2, column=0, sticky='nsew')
         CellTooltip(
             self.history_tree,
