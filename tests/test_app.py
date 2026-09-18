@@ -152,7 +152,8 @@ def test_gui_navigation_has_stable_size_and_toggle_controls_have_no_x(sandbox, t
     assert window.auto_button.cget('text') == '自动同步：开启'
     assert window.all_scope_button.winfo_class() == 'TButton'
     assert window.all_scope_button.cget('style') == 'SegmentSelected.TButton'
-    assert window.tree.cget('displaycolumns') == ('title', 'owner', 'owner_gap', 'id')
+    assert window.tree.cget('displaycolumns') == (
+        'title', 'owner', 'owner_gap', 'id', 'right_pad', 'fill')
 
     window.show_page(1)
 
@@ -298,10 +299,12 @@ def test_session_table_shows_full_ids_and_visible_column_dividers(sandbox, tk_ro
     window._position_table_dividers()
 
     assert window.tree.set(session_id, 'id') == session_id
-    assert int(window.tree.column('id', 'width')) >= 290
+    assert int(window.tree.column('id', 'width')) >= 440
+    assert int(window.tree.column('right_pad', 'width')) >= 16
     assert len(window.table_dividers) == 3
     assert window.table_dividers[0].place_info()
     assert window.owner_id_divider.place_info()
+    assert int(window.owner_id_divider.place_info()['y']) >= 30
 
 
 def test_session_owner_column_shows_the_full_account_name(sandbox, tk_root):
@@ -332,7 +335,55 @@ def test_owner_and_session_id_columns_have_a_divided_gap(sandbox, tk_root):
     assert displayed[owner_index + 1:owner_index + 3] == ('owner_gap', 'id')
     assert int(window.tree.column('owner_gap', 'width')) >= 24
     assert window.owner_id_divider.place_info()
-    assert window.owner_id_divider.cget('background') == '#64748B'
+    assert window.owner_id_divider.cget('background') == '#94A3B8'
+
+
+def test_session_metadata_columns_use_left_aligned_fixed_headers(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+
+    window = gui.Window(tk_root, path)
+
+    assert str(window.tree.heading('owner', 'anchor')) == 'w'
+    assert str(window.tree.heading('id', 'anchor')) == 'w'
+    assert window.tree.column('owner', 'stretch') == 0
+    assert window.tree.column('id', 'stretch') == 0
+    displayed = tuple(window.tree.cget('displaycolumns'))
+    assert displayed[displayed.index('id'):displayed.index('id') + 2] == (
+        'id', 'right_pad')
+
+
+def test_session_table_caps_title_width_and_uses_trailing_fill_space(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+
+    window._fit_session_table_columns(1800)
+
+    displayed = tuple(window.tree.cget('displaycolumns'))
+    total_width = sum(int(window.tree.column(key, 'width')) for key in displayed)
+    assert int(window.tree.column('title', 'width')) <= 720
+    assert displayed[-1] == 'fill'
+    assert int(window.tree.column('fill', 'width')) > 1
+    assert total_width == 1800
+
+
+def test_session_table_blocks_column_resize_drag(sandbox, monkeypatch, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+    event = type('Event', (), {'x': 10, 'y': 10})()
+
+    monkeypatch.setattr(window.tree, 'identify_region', lambda _x, _y: 'separator')
+
+    assert window._block_table_resize(event) == 'break'
+    assert window.tree.bind('<B1-Motion>')
 
 
 def test_escape_clears_session_highlight_and_disables_open(sandbox, tk_root):
@@ -403,8 +454,8 @@ def test_account_and_session_id_columns_resist_clipping(sandbox, tk_root):
 
     window = gui.Window(tk_root, path)
 
-    assert int(window.tree.column('owner', 'width')) >= 350
-    assert int(window.tree.column('id', 'width')) >= 350
+    assert int(window.tree.column('owner', 'width')) >= 280
+    assert int(window.tree.column('id', 'width')) >= 440
 
 
 def test_long_ids_are_shortened_for_tables():
