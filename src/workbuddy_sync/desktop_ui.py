@@ -422,13 +422,15 @@ class Window:
             style='MutedCard.TLabel',
         ).grid(row=1, column=0, sticky='w', pady=(4, 10))
         self.tree = ttk.Treeview(
-            table_card, columns=('selected', 'title', 'owner', 'id'), show='headings',
+            table_card, columns=('selected', 'title', 'owner', 'owner_gap', 'id'),
+            show='headings',
             selectmode='browse', height=8,
         )
         for key, title, width, minwidth, stretch in [
             ('selected', '选择', 58, 58, False), ('title', '会话标题', 500, 240, True),
-            ('owner', '当前所属账号', 260, 220, False),
-            ('id', '会话 ID', 310, 290, False),
+            ('owner', '当前所属账号', 300, 280, False),
+            ('owner_gap', '', 28, 28, False),
+            ('id', '会话 ID', 320, 300, False),
         ]:
             self.tree.heading(key, text=title)
             self.tree.column(key, width=width, minwidth=minwidth, stretch=stretch)
@@ -440,8 +442,11 @@ class Window:
         self.tree.bind('<ButtonRelease-1>', self._schedule_table_dividers, add='+')
         self.tree.bind('<Configure>', self._schedule_table_dividers, add='+')
         self.table_dividers = [
-            tk.Frame(self.tree, background='#94A3B8', width=1) for _ in range(3)
+            tk.Frame(self.tree, background='#94A3B8', width=1) for _ in range(2)
         ]
+        self.owner_id_divider = tk.Frame(
+            self.tree, background='#64748B', width=2)
+        self.table_dividers.append(self.owner_id_divider)
         CellTooltip(self.tree, self._main_tree_tooltip)
 
         actions = ttk.Frame(page, style='App.TFrame')
@@ -648,12 +653,10 @@ class Window:
                 owner_id = row['user_id'] or ''
                 self.session_owner_ids[session_id] = owner_id
                 owner_name = names.get(owner_id)
-                owner_display = (
-                    f'{owner_name} · {short_id(owner_id)}' if owner_name else short_id(owner_id)
-                )
+                owner_display = owner_name if owner_name else short_id(owner_id)
                 values = (
                     '☑' if session_id in self.selected_sessions else '☐',
-                    display_title(row['title']), owner_display, session_id,
+                    display_title(row['title']), owner_display, '', session_id,
                 )
                 if self.tree.exists(session_id):
                     self.tree.item(session_id, values=values)
@@ -736,8 +739,8 @@ class Window:
         self.status.set('账号 ID 已复制。')
 
     def toggle_scope(self):
-        columns = ('title', 'owner', 'id') if self.all_sessions.get() else (
-            'selected', 'title', 'owner', 'id')
+        columns = ('title', 'owner', 'owner_gap', 'id') if self.all_sessions.get() else (
+            'selected', 'title', 'owner', 'owner_gap', 'id')
         self.tree.configure(displaycolumns=columns)
         is_all = self.all_sessions.get()
         self.all_scope_button.configure(
@@ -840,12 +843,24 @@ class Window:
     def _position_table_dividers(self):
         displayed = self.tree.tk.splitlist(self.tree.cget('displaycolumns'))
         x = 0
-        for divider, column in zip(self.table_dividers, displayed[:-1]):
-            x += int(self.tree.column(column, 'width'))
-            divider.place(x=x - 1, y=0, width=1, relheight=1)
+        standard_positions = []
+        owner_id_position = None
+        for column in displayed:
+            width = int(self.tree.column(column, 'width'))
+            if column in ('selected', 'title'):
+                standard_positions.append(x + width)
+            elif column == 'owner_gap':
+                owner_id_position = x + width // 2
+            x += width
+        for divider, position in zip(self.table_dividers[:2], standard_positions):
+            divider.place(x=position - 1, y=0, width=1, relheight=1)
             divider.lift()
-        for divider in self.table_dividers[len(displayed) - 1:]:
+        for divider in self.table_dividers[len(standard_positions):2]:
             divider.place_forget()
+        if owner_id_position is not None:
+            self.owner_id_divider.place(
+                x=owner_id_position - 1, y=0, width=2, relheight=1)
+            self.owner_id_divider.lift()
 
     def _clear_session_highlight(self, _event=None):
         cleared = False

@@ -152,7 +152,7 @@ def test_gui_navigation_has_stable_size_and_toggle_controls_have_no_x(sandbox, t
     assert window.auto_button.cget('text') == '自动同步：开启'
     assert window.all_scope_button.winfo_class() == 'TButton'
     assert window.all_scope_button.cget('style') == 'SegmentSelected.TButton'
-    assert window.tree.cget('displaycolumns') == ('title', 'owner', 'id')
+    assert window.tree.cget('displaycolumns') == ('title', 'owner', 'owner_gap', 'id')
 
     window.show_page(1)
 
@@ -300,7 +300,39 @@ def test_session_table_shows_full_ids_and_visible_column_dividers(sandbox, tk_ro
     assert window.tree.set(session_id, 'id') == session_id
     assert int(window.tree.column('id', 'width')) >= 290
     assert len(window.table_dividers) == 3
-    assert all(divider.place_info() for divider in window.table_dividers[:2])
+    assert window.table_dividers[0].place_info()
+    assert window.owner_id_divider.place_info()
+
+
+def test_session_owner_column_shows_the_full_account_name(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    account_name = 'demo-account@example.com'
+    auth.write_text(json.dumps({'account': {'uid': 'A', 'nickname': account_name}}))
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+
+    window = gui.Window(tk_root, path)
+
+    assert window.tree.set('s1', 'owner') == account_name
+
+
+def test_owner_and_session_id_columns_have_a_divided_gap(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+
+    window = gui.Window(tk_root, path)
+    tk_root.update_idletasks()
+    window._position_table_dividers()
+
+    displayed = tuple(window.tree.cget('displaycolumns'))
+    owner_index = displayed.index('owner')
+    assert displayed[owner_index + 1:owner_index + 3] == ('owner_gap', 'id')
+    assert int(window.tree.column('owner_gap', 'width')) >= 24
+    assert window.owner_id_divider.place_info()
+    assert window.owner_id_divider.cget('background') == '#64748B'
 
 
 def test_escape_clears_session_highlight_and_disables_open(sandbox, tk_root):
