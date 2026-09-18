@@ -21,7 +21,7 @@ BORDER = '#E2E8F0'
 WARNING = '#B91C1C'
 UI_FONT = 'Microsoft YaHei UI'
 MONO_FONT = 'Consolas'
-TOOLTIP_GAP = 7
+ACTION_HELP_DEFAULT = '鼠标停留在按钮上查看说明 · 同步规则会自动保存'
 
 MESSAGES = {
     'disabled': '自动同步未开启。可以先预览，再同步一次。',
@@ -41,13 +41,6 @@ def short_id(value: str) -> str:
 
 def display_title(value: str | None) -> str:
     return ' '.join(value.split()) if value else '未命名会话'
-
-
-def tooltip_y(anchor_y, anchor_height, tip_height, screen_height):
-    below = anchor_y + anchor_height + TOOLTIP_GAP
-    if below + tip_height <= screen_height:
-        return below
-    return max(0, anchor_y - tip_height - TOOLTIP_GAP)
 
 
 def enable_windows_dpi_awareness():
@@ -107,41 +100,6 @@ class CellTooltip:
             self.tip.destroy()
             self.tip = None
         self.key = None
-
-
-class WidgetTooltip:
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tip = None
-        widget.bind('<Enter>', self.show, add='+')
-        widget.bind('<Leave>', self.hide, add='+')
-        widget.bind('<FocusIn>', self.show, add='+')
-        widget.bind('<FocusOut>', self.hide, add='+')
-        widget.bind('<ButtonPress>', self.hide, add='+')
-
-    def show(self, _event=None):
-        self.hide()
-        self.tip = tk.Toplevel(self.widget)
-        self.tip.wm_overrideredirect(True)
-        self.tip.withdraw()
-        tk.Label(
-            self.tip, text=self.text, background='#0F172A', foreground='#FFFFFF',
-            padx=10, pady=7, justify='left', wraplength=360, font=(UI_FONT, 9),
-        ).pack()
-        self.tip.update_idletasks()
-        x = self.widget.winfo_rootx()
-        y = tooltip_y(
-            self.widget.winfo_rooty(), self.widget.winfo_height(),
-            self.tip.winfo_reqheight(), self.widget.winfo_screenheight(),
-        )
-        self.tip.wm_geometry(f'+{x}+{y}')
-        self.tip.deiconify()
-
-    def hide(self, _event=None):
-        if self.tip is not None:
-            self.tip.destroy()
-            self.tip = None
 
 
 class Window:
@@ -437,8 +395,7 @@ class Window:
         ).grid(row=1, column=0, sticky='w', pady=(4, 10))
         self.tree = ttk.Treeview(
             table_card,
-            columns=(
-                'selected', 'title', 'owner', 'owner_gap', 'id', 'right_pad', 'fill'),
+            columns=('selected', 'title', 'owner', 'id', 'fill'),
             show='headings',
             selectmode='browse', height=8,
         )
@@ -446,9 +403,7 @@ class Window:
             ('selected', '选择', 58, 58, False, 'center'),
             ('title', '会话标题', 500, 180, False, 'w'),
             ('owner', '当前所属账号', 280, 280, False, 'w'),
-            ('owner_gap', '', 28, 28, False, 'center'),
             ('id', '会话 ID', 440, 440, False, 'w'),
-            ('right_pad', '', 18, 18, False, 'center'),
             ('fill', '', 1, 1, False, 'center'),
         ]:
             self.tree.heading(key, text=title, anchor=anchor)
@@ -460,19 +415,12 @@ class Window:
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.bind('<Button-1>', self._on_tree_click, add='+')
         self.tree.bind('<B1-Motion>', self._block_table_resize, add='+')
-        self.tree.bind('<ButtonRelease-1>', self._schedule_table_dividers, add='+')
-        self.tree.bind('<Configure>', self._schedule_table_dividers, add='+')
-        self.table_dividers = [
-            tk.Frame(self.tree, background='#94A3B8', width=1) for _ in range(2)
-        ]
-        self.owner_id_divider = tk.Frame(
-            self.tree, background='#94A3B8', width=1)
-        self.table_dividers.append(self.owner_id_divider)
+        self.tree.bind('<Configure>', self._schedule_table_layout, add='+')
         CellTooltip(self.tree, self._main_tree_tooltip)
 
         actions = ttk.Frame(page, style='App.TFrame')
         actions.grid(row=3, column=0, sticky='ew', pady=(12, 0))
-        actions.columnconfigure(0, weight=1)
+        actions.columnconfigure(1, weight=1)
         action_buttons = ttk.Frame(actions, style='App.TFrame')
         action_buttons.grid(row=0, column=0, sticky='w')
         self.sync_button = ttk.Button(
@@ -488,21 +436,28 @@ class Window:
             style='Secondary.TButton',
         )
         self.open_button.pack(side='left', padx=(8, 0))
-        ttk.Label(
-            actions, text='同步规则会自动保存', style='Subtitle.TLabel',
-        ).grid(row=0, column=1, sticky='e', pady=9)
-        self.action_tooltips = {
-            self.sync_button: WidgetTooltip(
-                self.sync_button,
-                '立即将当前同步范围应用到当前登录账号。自动同步开启时通常无需手动点击。',
-            ),
-            self.refresh_button: WidgetTooltip(
-                self.refresh_button, '重新读取当前账号和会话列表，不会修改会话数据。',
-            ),
-            self.open_button: WidgetTooltip(
-                self.open_button, '打开列表中高亮的会话。按 Esc 可取消高亮。',
-            ),
+        self.action_help = tk.StringVar(value=ACTION_HELP_DEFAULT)
+        self.action_help_label = ttk.Label(
+            actions, textvariable=self.action_help, style='Subtitle.TLabel',
+            anchor='w', justify='left', wraplength=520,
+        )
+        self.action_help_label.grid(
+            row=0, column=1, sticky='ew', padx=(18, 0), pady=7)
+        action_help = {
+            self.sync_button: (
+                '立即将当前同步范围应用到当前登录账号。自动同步开启时通常无需手动点击。'),
+            self.refresh_button: '重新读取当前账号和会话列表，不会修改会话数据。',
+            self.open_button: '打开列表中高亮的会话。按 Esc 可取消高亮。',
         }
+        for button, help_text in action_help.items():
+            button.bind(
+                '<Enter>', lambda _event, text=help_text: self.action_help.set(text), add='+')
+            button.bind(
+                '<FocusIn>', lambda _event, text=help_text: self.action_help.set(text), add='+')
+            button.bind(
+                '<Leave>', lambda _event: self.action_help.set(ACTION_HELP_DEFAULT), add='+')
+            button.bind(
+                '<FocusOut>', lambda _event: self.action_help.set(ACTION_HELP_DEFAULT), add='+')
         self.tree.bind('<<TreeviewSelect>>', self._update_action_states, add='+')
         self.toggle_scope()
 
@@ -677,7 +632,7 @@ class Window:
                 owner_display = owner_name if owner_name else short_id(owner_id)
                 values = (
                     '☑' if session_id in self.selected_sessions else '☐',
-                    display_title(row['title']), owner_display, '', session_id, '', '',
+                    display_title(row['title']), owner_display, session_id, '',
                 )
                 if self.tree.exists(session_id):
                     self.tree.item(session_id, values=values)
@@ -762,10 +717,9 @@ class Window:
 
     def toggle_scope(self):
         columns = (
-            ('title', 'owner', 'owner_gap', 'id', 'right_pad', 'fill')
+            ('title', 'owner', 'id', 'fill')
             if self.all_sessions.get()
-            else (
-                'selected', 'title', 'owner', 'owner_gap', 'id', 'right_pad', 'fill')
+            else ('selected', 'title', 'owner', 'id', 'fill')
         )
         self.tree.configure(displaycolumns=columns)
         is_all = self.all_sessions.get()
@@ -782,7 +736,7 @@ class Window:
             self.select_all_button.pack(side='left')
             self.clear_selection_button.pack(side='left', padx=(6, 0))
         self._update_scope_summary(len(self.tree.get_children()))
-        self._schedule_table_dividers()
+        self._schedule_table_layout()
 
     def set_scope(self, all_sessions):
         self.all_sessions.set(all_sessions)
@@ -869,12 +823,11 @@ class Window:
         if self.tree.identify_region(event.x, event.y) == 'separator':
             return 'break'
 
-    def _schedule_table_dividers(self, _event=None):
+    def _schedule_table_layout(self, _event=None):
         self.root.after_idle(self._layout_session_table)
 
     def _layout_session_table(self):
         self._fit_session_table_columns()
-        self._position_table_dividers()
 
     def _fit_session_metadata_columns(self):
         font = tkfont.nametofont('TkDefaultFont', root=self.root)
@@ -900,31 +853,6 @@ class Window:
         fill_width = max(1, available_width - fixed_width - title_width)
         self.tree.column('title', width=title_width)
         self.tree.column('fill', width=fill_width)
-
-    def _position_table_dividers(self):
-        displayed = self.tree.tk.splitlist(self.tree.cget('displaycolumns'))
-        body_y = 34
-        body_height = max(1, self.tree.winfo_height() - body_y)
-        x = 0
-        standard_positions = []
-        owner_id_position = None
-        for column in displayed:
-            width = int(self.tree.column(column, 'width'))
-            if column in ('selected', 'title'):
-                standard_positions.append(x + width)
-            elif column == 'owner_gap':
-                owner_id_position = x + width // 2
-            x += width
-        for divider, position in zip(self.table_dividers[:2], standard_positions):
-            divider.place(
-                x=position - 1, y=body_y, width=1, height=body_height)
-            divider.lift()
-        for divider in self.table_dividers[len(standard_positions):2]:
-            divider.place_forget()
-        if owner_id_position is not None:
-            self.owner_id_divider.place(
-                x=owner_id_position, y=body_y, width=1, height=body_height)
-            self.owner_id_divider.lift()
 
     def _clear_session_highlight(self, _event=None):
         cleared = False

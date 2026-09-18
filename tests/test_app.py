@@ -153,7 +153,7 @@ def test_gui_navigation_has_stable_size_and_toggle_controls_have_no_x(sandbox, t
     assert window.all_scope_button.winfo_class() == 'TButton'
     assert window.all_scope_button.cget('style') == 'SegmentSelected.TButton'
     assert window.tree.cget('displaycolumns') == (
-        'title', 'owner', 'owner_gap', 'id', 'right_pad', 'fill')
+        'title', 'owner', 'id', 'fill')
 
     window.show_page(1)
 
@@ -285,7 +285,7 @@ def test_overview_scope_and_session_selection_save_immediately(sandbox, tk_root)
     assert api().Settings.load(path).session_ids == []
 
 
-def test_session_table_shows_full_ids_and_visible_column_dividers(sandbox, tk_root):
+def test_session_table_shows_full_ids_with_native_column_boundaries(sandbox, tk_root):
     gui = importlib.import_module('workbuddy_sync.gui')
     home, auth = setup_data(sandbox)
     session_id = '01e3e2ed-6cf0-4dba-a9a7-1234567890ab'
@@ -295,16 +295,10 @@ def test_session_table_shows_full_ids_and_visible_column_dividers(sandbox, tk_ro
     settings(sandbox, home, auth).save(path)
 
     window = gui.Window(tk_root, path)
-    tk_root.update_idletasks()
-    window._position_table_dividers()
 
     assert window.tree.set(session_id, 'id') == session_id
     assert int(window.tree.column('id', 'width')) >= 440
-    assert int(window.tree.column('right_pad', 'width')) >= 16
-    assert len(window.table_dividers) == 3
-    assert window.table_dividers[0].place_info()
-    assert window.owner_id_divider.place_info()
-    assert int(window.owner_id_divider.place_info()['y']) >= 30
+    assert tuple(window.tree.cget('displaycolumns'))[:3] == ('title', 'owner', 'id')
 
 
 def test_session_owner_column_shows_the_full_account_name(sandbox, tk_root):
@@ -320,22 +314,19 @@ def test_session_owner_column_shows_the_full_account_name(sandbox, tk_root):
     assert window.tree.set('s1', 'owner') == account_name
 
 
-def test_owner_and_session_id_columns_have_a_divided_gap(sandbox, tk_root):
+def test_owner_and_session_id_columns_are_adjacent_and_left_aligned(sandbox, tk_root):
     gui = importlib.import_module('workbuddy_sync.gui')
     home, auth = setup_data(sandbox)
     path = sandbox / 'settings.json'
     settings(sandbox, home, auth).save(path)
 
     window = gui.Window(tk_root, path)
-    tk_root.update_idletasks()
-    window._position_table_dividers()
 
     displayed = tuple(window.tree.cget('displaycolumns'))
     owner_index = displayed.index('owner')
-    assert displayed[owner_index + 1:owner_index + 3] == ('owner_gap', 'id')
-    assert int(window.tree.column('owner_gap', 'width')) >= 24
-    assert window.owner_id_divider.place_info()
-    assert window.owner_id_divider.cget('background') == '#94A3B8'
+    assert displayed[owner_index + 1] == 'id'
+    assert str(window.tree.heading('owner', 'anchor')) == 'w'
+    assert str(window.tree.heading('id', 'anchor')) == 'w'
 
 
 def test_session_metadata_columns_use_left_aligned_fixed_headers(sandbox, tk_root):
@@ -351,8 +342,7 @@ def test_session_metadata_columns_use_left_aligned_fixed_headers(sandbox, tk_roo
     assert window.tree.column('owner', 'stretch') == 0
     assert window.tree.column('id', 'stretch') == 0
     displayed = tuple(window.tree.cget('displaycolumns'))
-    assert displayed[displayed.index('id'):displayed.index('id') + 2] == (
-        'id', 'right_pad')
+    assert displayed[displayed.index('id'):displayed.index('id') + 2] == ('id', 'fill')
 
 
 def test_session_table_caps_title_width_and_uses_trailing_fill_space(sandbox, tk_root):
@@ -418,19 +408,11 @@ def test_action_buttons_show_help_on_hover(sandbox, tk_root):
     for button, help_text in expected.items():
         button.event_generate('<Enter>')
         tk_root.update()
-        tooltip = window.action_tooltips[button]
-        assert tooltip.tip is not None
-        assert tooltip.tip.winfo_children()[0].cget('text').startswith(help_text)
+        assert window.action_help.get().startswith(help_text)
+        assert window.action_help_label.winfo_manager() == 'grid'
         button.event_generate('<Leave>')
         tk_root.update()
-        assert tooltip.tip is None
-
-
-def test_tooltip_flips_above_when_below_would_leave_the_screen():
-    desktop_ui = importlib.import_module('workbuddy_sync.desktop_ui')
-
-    assert desktop_ui.tooltip_y(100, 40, 50, 800) == 147
-    assert desktop_ui.tooltip_y(760, 40, 50, 800) == 703
+        assert window.action_help.get() == '鼠标停留在按钮上查看说明 · 同步规则会自动保存'
 
 
 def test_restored_window_keeps_enough_room_for_the_session_table(sandbox, tk_root):
