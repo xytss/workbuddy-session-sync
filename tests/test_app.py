@@ -284,6 +284,65 @@ def test_overview_scope_and_session_selection_save_immediately(sandbox, tk_root)
     assert api().Settings.load(path).session_ids == []
 
 
+def test_session_table_shows_full_ids_and_visible_column_dividers(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    session_id = '01e3e2ed-6cf0-4dba-a9a7-1234567890ab'
+    with sqlite3.connect(home / 'workbuddy.db') as db:
+        db.execute("UPDATE sessions SET id=? WHERE id='s1'", (session_id,))
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+
+    window = gui.Window(tk_root, path)
+    tk_root.update_idletasks()
+    window._position_table_dividers()
+
+    assert window.tree.set(session_id, 'id') == session_id
+    assert int(window.tree.column('id', 'width')) >= 290
+    assert len(window.table_dividers) == 3
+    assert all(divider.place_info() for divider in window.table_dividers[:2])
+
+
+def test_escape_clears_session_highlight_and_disables_open(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+    window.tree.selection_set('s1')
+    window._update_action_states()
+
+    assert tk_root.bind('<Escape>')
+    window._clear_session_highlight()
+
+    assert window.tree.selection() == ()
+    assert window.open_button.instate(['disabled'])
+    assert '取消' in window.status.get()
+
+
+def test_action_buttons_show_help_on_hover(sandbox, tk_root):
+    gui = importlib.import_module('workbuddy_sync.gui')
+    home, auth = setup_data(sandbox)
+    path = sandbox / 'settings.json'
+    settings(sandbox, home, auth).save(path)
+    window = gui.Window(tk_root, path)
+
+    expected = {
+        window.sync_button: '立即将当前同步范围应用到当前登录账号。',
+        window.refresh_button: '重新读取当前账号和会话列表，不会修改会话数据。',
+        window.open_button: '打开列表中高亮的会话。按 Esc 可取消高亮。',
+    }
+    for button, help_text in expected.items():
+        button.event_generate('<Enter>')
+        tk_root.update()
+        tooltip = window.action_tooltips[button]
+        assert tooltip.tip is not None
+        assert tooltip.tip.winfo_children()[0].cget('text').startswith(help_text)
+        button.event_generate('<Leave>')
+        tk_root.update()
+        assert tooltip.tip is None
+
+
 def test_long_ids_are_shortened_for_tables():
     gui = importlib.import_module('workbuddy_sync.gui')
     assert gui.short_id('dcb78cfa-f171-49c9-b936-c8b4b874b416') == 'dcb78cfa…b416'

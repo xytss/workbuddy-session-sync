@@ -101,6 +101,35 @@ class CellTooltip:
         self.key = None
 
 
+class WidgetTooltip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip = None
+        widget.bind('<Enter>', self.show, add='+')
+        widget.bind('<Leave>', self.hide, add='+')
+        widget.bind('<FocusIn>', self.show, add='+')
+        widget.bind('<FocusOut>', self.hide, add='+')
+        widget.bind('<ButtonPress>', self.hide, add='+')
+
+    def show(self, _event=None):
+        self.hide()
+        self.tip = tk.Toplevel(self.widget)
+        self.tip.wm_overrideredirect(True)
+        x = self.widget.winfo_rootx()
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 7
+        self.tip.wm_geometry(f'+{x}+{y}')
+        tk.Label(
+            self.tip, text=self.text, background='#0F172A', foreground='#FFFFFF',
+            padx=10, pady=7, justify='left', wraplength=360, font=(UI_FONT, 9),
+        ).pack()
+
+    def hide(self, _event=None):
+        if self.tip is not None:
+            self.tip.destroy()
+            self.tip = None
+
+
 class Window:
     def __init__(self, root, config_path: Path):
         self.root = root
@@ -183,6 +212,7 @@ class Window:
         self._build_sync_page()
         self._build_history_page()
         self._build_settings_page()
+        root.bind('<Escape>', self._clear_session_highlight, add='+')
 
         self.refresh()
         root.after(self.cfg.poll_seconds * 1000, self.poll)
@@ -254,7 +284,8 @@ class Window:
         style.configure('Treeview', background=CARD, fieldbackground=CARD, foreground=TEXT,
                         rowheight=34, bordercolor=BORDER, borderwidth=1)
         style.configure('Treeview.Heading', background='#F1F5F9', foreground=MUTED,
-                        font=(UI_FONT, 9, 'bold'), relief='flat', padding=(8, 8))
+                        font=(UI_FONT, 9, 'bold'), relief='solid', borderwidth=1,
+                        bordercolor='#CBD5E1', padding=(8, 8))
         style.map('Treeview', background=[('selected', '#DBEAFE')],
                   foreground=[('selected', '#1E3A8A')])
 
@@ -394,17 +425,23 @@ class Window:
             table_card, columns=('selected', 'title', 'owner', 'id'), show='headings',
             selectmode='browse', height=8,
         )
-        for key, title, width, stretch in [
-            ('selected', '选择', 58, False), ('title', '会话标题', 560, True),
-            ('owner', '当前所属账号', 210, False), ('id', '会话 ID', 150, False),
+        for key, title, width, minwidth, stretch in [
+            ('selected', '选择', 58, 58, False), ('title', '会话标题', 500, 240, True),
+            ('owner', '当前所属账号', 260, 220, False),
+            ('id', '会话 ID', 310, 290, False),
         ]:
             self.tree.heading(key, text=title)
-            self.tree.column(key, width=width, minwidth=50, stretch=stretch)
+            self.tree.column(key, width=width, minwidth=minwidth, stretch=stretch)
         self.tree.grid(row=2, column=0, sticky='nsew')
         scrollbar = ttk.Scrollbar(table_card, orient='vertical', command=self.tree.yview)
         scrollbar.grid(row=2, column=1, sticky='ns')
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.bind('<Button-1>', self._on_tree_click, add='+')
+        self.tree.bind('<ButtonRelease-1>', self._schedule_table_dividers, add='+')
+        self.tree.bind('<Configure>', self._schedule_table_dividers, add='+')
+        self.table_dividers = [
+            tk.Frame(self.tree, background='#94A3B8', width=1) for _ in range(3)
+        ]
         CellTooltip(self.tree, self._main_tree_tooltip)
 
         actions = ttk.Frame(page, style='App.TFrame')
@@ -428,6 +465,18 @@ class Window:
         ttk.Label(
             actions, text='同步规则会自动保存', style='Subtitle.TLabel',
         ).grid(row=0, column=1, sticky='e', pady=9)
+        self.action_tooltips = {
+            self.sync_button: WidgetTooltip(
+                self.sync_button,
+                '立即将当前同步范围应用到当前登录账号。自动同步开启时通常无需手动点击。',
+            ),
+            self.refresh_button: WidgetTooltip(
+                self.refresh_button, '重新读取当前账号和会话列表，不会修改会话数据。',
+            ),
+            self.open_button: WidgetTooltip(
+                self.open_button, '打开列表中高亮的会话。按 Esc 可取消高亮。',
+            ),
+        }
         self.tree.bind('<<TreeviewSelect>>', self._update_action_states, add='+')
         self.toggle_scope()
 
@@ -500,7 +549,7 @@ class Window:
         self.history_tree.heading('title', text='会话标题')
         self.history_tree.heading('id', text='会话 ID')
         self.history_tree.column('title', width=490, minwidth=220, stretch=True)
-        self.history_tree.column('id', width=150, minwidth=120, stretch=False)
+        self.history_tree.column('id', width=310, minwidth=290, stretch=False)
         self.history_tree.grid(row=2, column=0, sticky='nsew')
         CellTooltip(
             self.history_tree,
@@ -604,7 +653,7 @@ class Window:
                 )
                 values = (
                     '☑' if session_id in self.selected_sessions else '☐',
-                    display_title(row['title']), owner_display, short_id(session_id),
+                    display_title(row['title']), owner_display, session_id,
                 )
                 if self.tree.exists(session_id):
                     self.tree.item(session_id, values=values)
@@ -666,7 +715,7 @@ class Window:
         rows = self.engine.sessions_for_account(uid)
         existing = set(self.history_tree.get_children())
         for row in rows:
-            values = (display_title(row['title']), short_id(row['id']))
+            values = (display_title(row['title']), row['id'])
             if self.history_tree.exists(row['id']):
                 self.history_tree.item(row['id'], values=values)
                 self.history_tree.move(row['id'], '', 'end')
@@ -704,6 +753,7 @@ class Window:
             self.select_all_button.pack(side='left')
             self.clear_selection_button.pack(side='left', padx=(6, 0))
         self._update_scope_summary(len(self.tree.get_children()))
+        self._schedule_table_dividers()
 
     def set_scope(self, all_sessions):
         self.all_sessions.set(all_sessions)
@@ -783,6 +833,31 @@ class Window:
         if item:
             self.toggle_session(item)
             return 'break'
+
+    def _schedule_table_dividers(self, _event=None):
+        self.root.after_idle(self._position_table_dividers)
+
+    def _position_table_dividers(self):
+        displayed = self.tree.tk.splitlist(self.tree.cget('displaycolumns'))
+        x = 0
+        for divider, column in zip(self.table_dividers, displayed[:-1]):
+            x += int(self.tree.column(column, 'width'))
+            divider.place(x=x - 1, y=0, width=1, relheight=1)
+            divider.lift()
+        for divider in self.table_dividers[len(displayed) - 1:]:
+            divider.place_forget()
+
+    def _clear_session_highlight(self, _event=None):
+        cleared = False
+        for tree in (self.tree, self.history_tree):
+            selected = tree.selection()
+            if selected:
+                tree.selection_remove(*selected)
+                cleared = True
+        self._update_action_states()
+        if cleared:
+            self.status.set('已取消会话高亮。')
+        return 'break'
 
     def _main_tree_tooltip(self, item, column):
         if column == 'id':
